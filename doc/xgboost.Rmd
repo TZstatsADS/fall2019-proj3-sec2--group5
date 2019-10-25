@@ -1,0 +1,73 @@
+---
+title: "XGBoost"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(xgboost)
+library(caret)
+library(dplyr)
+```
+
+```{r}
+load("../output/feature_train.RData")
+load("../output/feature_test.RData")
+
+numberOfClasses <- length(unique(dat_train$emotion_idx))
+
+train_mat_dat <-dat_train[, c(1:(length(dat_train) - 1))] %>% as.matrix()
+train_label <- as.numeric(dat_train$emotion_idx)
+train_matrix <- xgb.DMatrix(data = train_mat_dat, label = train_label)
+
+test_mat_dat <-dat_test[, c(1:(length(dat_test) - 1))] %>% as.matrix()
+test_label <- as.numeric(dat_test$emotion_idx)
+test_matrix <- xgb.DMatrix(data = test_mat_dat, label = test_label)
+```
+
+
+
+```{r}
+xgb_params <- list(
+  eta=0.1,
+  max_depth=10,
+  objective="multi:softprob",
+  eval_metric="mlogloss",
+  num_class=numberOfClasses + 1
+)
+
+xgb.fit<- xgb.train(
+  params=xgb_params,
+  data=train_matrix,
+  nrounds=300,
+  watchlist=list(val1=train_matrix,val2=test_matrix),
+  verbose=0
+)
+```
+
+
+```{r}
+xgb_test_pred <- predict(xgb.fit, test_matrix, reshape = T) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1, label = test_label)
+
+confusionMatrix(factor(xgb_test_pred$prediction), factor(xgb_test_pred$label), mode = "everything")
+
+xgb_train_pred <- predict(xgb.fit, train_matrix, reshape = T) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1, label = train_label)
+
+confusionMatrix(factor(xgb_train_pred$prediction), factor(xgb_train_pred$label), mode = "everything")
+
+xgb.save(xgb.fit, "xgb.model")
+```
+
+
+
+```{r}
+elog <- xgb.fit$evaluation_log
+ggplot(elog)+
+  geom_line(aes(x=iter, y=val1_mlogloss), color = "red")+
+  geom_line(aes(x=iter, y=val2_mlogloss), color = "blue")
+
+```
+
