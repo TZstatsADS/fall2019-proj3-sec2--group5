@@ -17,57 +17,83 @@ library(dplyr)
 load("../output/feature_train.RData")
 load("../output/feature_test.RData")
 
-numberOfClasses <- length(unique(dat_train$emotion_idx))
+source("../lib/xgb_train.R")
 
-train_mat_dat <-dat_train[, c(1:(length(dat_train) - 1))] %>% as.matrix()
-train_label <- as.numeric(dat_train$emotion_idx)
-train_matrix <- xgb.DMatrix(data = train_mat_dat, label = train_label)
-
-test_mat_dat <-dat_test[, c(1:(length(dat_test) - 1))] %>% as.matrix()
-test_label <- as.numeric(dat_test$emotion_idx)
-test_matrix <- xgb.DMatrix(data = test_mat_dat, label = test_label)
-```
-
-
-
-```{r}
-xgb_params <- list(
-  eta=0.1,
-  max_depth=10,
-  objective="multi:softprob",
-  eval_metric="mlogloss",
-  num_class=numberOfClasses + 1
-)
-
-xgb.fit<- xgb.train(
-  params=xgb_params,
-  data=train_matrix,
-  nrounds=300,
-  watchlist=list(val1=train_matrix,val2=test_matrix),
-  verbose=0
-)
+model1 <- xgb_train(dat_train = dat_train, par = NULL)
 ```
 
 
 ```{r}
-xgb_test_pred <- predict(xgb.fit, test_matrix, reshape = T) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1, label = test_label)
+source("../lib/xgb_test.R")
+
+  test_mat_dat <-dat_test[, c(1:(length(dat_test) - 1))] %>% as.matrix()
+  test_label <- as.numeric(dat_test$emotion_idx)
+  test_matrix <- xgb.DMatrix(data = test_mat_dat, label = test_label)
+
+
+
+xgb_test_pred <- xgb_test(model = model1, dat_test = dat_test, par = NULL) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1, label = test_label)
 
 confusionMatrix(factor(xgb_test_pred$prediction), factor(xgb_test_pred$label), mode = "everything")
 
-xgb_train_pred <- predict(xgb.fit, train_matrix, reshape = T) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1, label = train_label)
+xgb_train_pred <- xgb_test(model = model1, dat_test = dat_train, par = NULL) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1, label = train_label)
 
 confusionMatrix(factor(xgb_train_pred$prediction), factor(xgb_train_pred$label), mode = "everything")
 
-xgb.save(xgb.fit, "xgb.model")
+xgb.save(model1, "xgb.model")
 ```
+
+
+
 
 
 
 ```{r}
-elog <- xgb.fit$evaluation_log
-ggplot(elog)+
-  geom_line(aes(x=iter, y=val1_mlogloss), color = "red")+
-  geom_line(aes(x=iter, y=val2_mlogloss), color = "blue")
+source("../lib/xgb_cv.R")
+      
+xgb_cv(dat_train = dat_train, K=5, par = NULL)
 
 ```
 
+
+
+
+```{r}
+#### TUNE ###
+max_depth_values <- seq(3,9,2)
+min_child_weight_values <- seq(1,6,2)
+    
+    # error matrix
+    error_matrix = matrix(NA,nrow = length(max_depth_values), length(min_child_weight_values))
+    rownames(error_matrix) <- paste(max_depth_values)
+    colnames(error_matrix) <- paste(min_child_weight_values)
+    
+    ## cv sd matrix
+    sd_matrix = matrix(NA,nrow = length(max_depth_values), length(min_child_weight_values))
+    rownames(sd_matrix) <- paste(max_depth_values)
+    colnames(sd_matrix) <-  paste(min_child_weight_values)
+    
+    #tuning process
+    for (i in 1:length(max_depth_values)){
+      for (j in 1:length(min_child_weight_values)){
+        par <- list(depth = max_depth_values[i], child_weight = min_child_weight_values[j] )
+        error_matrix[i,j] <- cv(dat_train, label_train, run.xgboost = T, par = par)$error
+        sd_matrix[i,j] <- cv(dat_train, label_train, run.xgboost = T, par = par)$sd
+      }
+    }
+    
+    # best cv.error
+    cv_error =  min(error_matrix)
+    # best parameter
+    best_par = list(depth = max_depth_values[which(error_matrix == min(error_matrix), arr.ind = T)[1]],
+                    child_weight = min_child_weight_values[which(error_matrix == min(error_matrix), arr.ind = T)[2]])
+
+  }
+  
+  if(verbose == TRUE){
+    print(error_matrix)
+    print(sd_matrix)
+  }
+  
+  return(list(cv_error,best_par))
+```
