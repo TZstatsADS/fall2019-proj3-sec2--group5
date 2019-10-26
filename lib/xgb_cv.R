@@ -2,8 +2,8 @@ xgb_cv <- function(dat_train, K=5, par=NULL){
   
   
   library("xgboost")
-  source("../lib/train.R")
-  source("../lib/test.R")
+  source("../lib/xgb_train.R")
+  source("../lib/xgb_test.R")
   
   n <- nrow(dat_train)
   n.fold <- floor(n/K)
@@ -14,11 +14,14 @@ xgb_cv <- function(dat_train, K=5, par=NULL){
     
     train.data <- dat_train[s != i,]
     test.data <- dat_train[s == i,]
+    test.label <- as.numeric(test.data$emotion_idx)
     
-    fit.model <- train(train.data, par = par)
-    pred <- test(fit.model, par = par)
+    fit.model <- xgb_train(train.data, par = par)
     
-    cv.error[i] <- mean(pred != test.label)
+    pred <- xgb_test(fit.model, test.data, par = par) %>% as.data.frame() %>% 
+      mutate(prediction = max.col(., ties.method = "last")-1)
+    
+    cv.error[i] <- mean(pred$prediction != test.label)
     
   }		
   

@@ -13,6 +13,8 @@ library(caret)
 library(dplyr)
 ```
 
+### Train
+
 ```{r}
 load("../output/feature_train.RData")
 load("../output/feature_test.RData")
@@ -22,15 +24,10 @@ source("../lib/xgb_train.R")
 model1 <- xgb_train(dat_train = dat_train, par = NULL)
 ```
 
+### Test
 
 ```{r}
 source("../lib/xgb_test.R")
-
-  test_mat_dat <-dat_test[, c(1:(length(dat_test) - 1))] %>% as.matrix()
-  test_label <- as.numeric(dat_test$emotion_idx)
-  test_matrix <- xgb.DMatrix(data = test_mat_dat, label = test_label)
-
-
 
 xgb_test_pred <- xgb_test(model = model1, dat_test = dat_test, par = NULL) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1, label = test_label)
 
@@ -47,12 +44,14 @@ xgb.save(model1, "xgb.model")
 
 
 
+### Cross Validation
 
 ```{r}
+
 source("../lib/xgb_cv.R")
       
-xgb_cv(dat_train = dat_train, K=5, par = NULL)
-
+cv.result <- xgb_cv(dat_train = dat_train, K=5, par = NULL)
+cv.result
 ```
 
 
@@ -60,40 +59,24 @@ xgb_cv(dat_train = dat_train, K=5, par = NULL)
 
 ```{r}
 #### TUNE ###
-max_depth_values <- seq(3,9,2)
-min_child_weight_values <- seq(1,6,2)
-    
-    # error matrix
-    error_matrix = matrix(NA,nrow = length(max_depth_values), length(min_child_weight_values))
-    rownames(error_matrix) <- paste(max_depth_values)
-    colnames(error_matrix) <- paste(min_child_weight_values)
-    
-    ## cv sd matrix
-    sd_matrix = matrix(NA,nrow = length(max_depth_values), length(min_child_weight_values))
-    rownames(sd_matrix) <- paste(max_depth_values)
-    colnames(sd_matrix) <-  paste(min_child_weight_values)
-    
-    #tuning process
-    for (i in 1:length(max_depth_values)){
-      for (j in 1:length(min_child_weight_values)){
-        par <- list(depth = max_depth_values[i], child_weight = min_child_weight_values[j] )
-        error_matrix[i,j] <- cv(dat_train, label_train, run.xgboost = T, par = par)$error
-        sd_matrix[i,j] <- cv(dat_train, label_train, run.xgboost = T, par = par)$sd
-      }
-    }
-    
-    # best cv.error
-    cv_error =  min(error_matrix)
-    # best parameter
-    best_par = list(depth = max_depth_values[which(error_matrix == min(error_matrix), arr.ind = T)[1]],
-                    child_weight = min_child_weight_values[which(error_matrix == min(error_matrix), arr.ind = T)[2]])
+source("../lib/xgb_tune.R")
 
-  }
-  
-  if(verbose == TRUE){
-    print(error_matrix)
-    print(sd_matrix)
-  }
-  
-  return(list(cv_error,best_par))
+tune.result <- xgb_tune(dat_train = dat_train)
+tune.result
+cv_err <- as.data.frame(tune.result[1])
+save(cv_err, file = "./cv_err.Rdata")
+best_par <- as.data.frame(tune.result[2])
+class(best_par)
+save(best_par, file = "./best_par.Rdata")
+```
+
+
+```{r}
+model_tuned <- xgb_train(dat_train = dat_train, par = best_par)
+
+tuned_pred <- xgb_test(model = model_tuned, dat_test = dat_test, par = NULL) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1, label = test_label)
+
+confusionMatrix(factor(tuned_pred$prediction), factor(tuned_pred$label), mode = "everything")
+
+xgb.save(model_tuned, "xgb_tuned.model")
 ```

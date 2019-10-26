@@ -7,7 +7,7 @@ xgb_test <- function(model, dat_test, par = NULL) {
   test_matrix <- xgb.DMatrix(data = test_mat_dat, label = test_label)
   
   if (is.null(par)) {
-    ntrees = 100
+    ntrees = 300
   } else{
     ntrees = par$ntrees
   }
