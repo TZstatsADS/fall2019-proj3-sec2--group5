@@ -11,72 +11,144 @@ knitr::opts_chunk$set(echo = TRUE)
 library(xgboost)
 library(caret)
 library(dplyr)
+library(MASS)
 ```
 
 ### Train
 
 ```{r}
+source("../lib/xgb_train.R")
+source("../lib/xgb_test.R")
+source("../lib/xgb_cv.R")
+source("../lib/xgb_tune.R")
+source("../lib/xgb_accuracy.R")
+source("../lib/pca.train.test.R")
+source("../lib/ac_byclass.R")
+
 load("../output/feature_train.RData")
 load("../output/feature_test.RData")
 
-source("../lib/xgb_train.R")
+dat_train1 <- read.csv("C:/Users/haosi/Desktop/dat_train.csv")[,-1]
+dat_test1 <- read.csv("C:/Users/haosi/Desktop/dat_test.csv")[,-1]
 
-model1 <- xgb_train(dat_train = dat_train, par = NULL)
+pc.data <- pca.train.test(dat_train, dat_test)
+pc.train <- pc.data$train
+pc.test <- pc.data$test
+
+pc.data.new <- pca.train.test(dat_train1, dat_test1)
+pc.train.new <- pc.data.new$train
+pc.test.new <- pc.data.new$test
 ```
-
-### Test
-
-```{r}
-source("../lib/xgb_test.R")
-
-xgb_test_pred <- xgb_test(model = model1, dat_test = dat_test, par = NULL) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1, label = test_label)
-
-confusionMatrix(factor(xgb_test_pred$prediction), factor(xgb_test_pred$label), mode = "everything")
-
-xgb_train_pred <- xgb_test(model = model1, dat_test = dat_train, par = NULL) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1, label = train_label)
-
-confusionMatrix(factor(xgb_train_pred$prediction), factor(xgb_train_pred$label), mode = "everything")
-
-xgb.save(model1, "xgb.model")
-```
-
-
-
-
 
 ### Cross Validation
 
 ```{r}
-
-source("../lib/xgb_cv.R")
-      
-cv.result <- xgb_cv(dat_train = dat_train, K=5, par = NULL)
+cv.tm <- system.time(cv.result <- xgb_cv(dat_train = pc.train, K=5, par = NULL))
 cv.result
+cv.tm
 ```
 
 
 
+
+```{r}
+tm.baseline <- system.time(xgb_baseline <- xgb_train(dat_train = dat_train))
+tm.pca.baseline <- system.time(xgb_pca <- xgb_train(dat_train = pc.train))
+tm.new <- system.time(xgb_newfeature <- xgb_train(dat_train = dat_train1))
+tm.pca.new <- system.time(xgb_pca_newfeature <- xgb_train(dat_train = pc.train.new))
+
+ac.baseline <- xgb_accuracy(xgb_baseline, testdata = dat_test, testlabel = dat_test$emotion_idx)$overall[1]
+ac.pca.baseline <- xgb_accuracy(xgb_pca, testdata = pc.test, testlabel = pc.test$emotion_idx)$overall[1]
+ac.new <- xgb_accuracy(xgb_newfeature, testdata = dat_test1, testlabel = dat_test1$emotion_idx)$overall[1]
+ac.pca.new <- xgb_accuracy(xgb_pca_newfeature, testdata = pc.test.new, 
+                       testlabel = pc.test.new$emotion_idx)$overall[1]
+
+time <- c(tm.baseline[1], tm.pca.baseline[1], tm.new[1], tm.pca.new[1])
+ac <- c(ac.baseline, ac.pca.baseline, ac.new, ac.pca.new)
+
+type <- c("baseline", "baseline_pca", "new_feature", "new_feature_pca")
+performance <- data.frame(type, time, ac)
+performance
+
+baseline.miss <- xgb_accuracy(xgb_baseline, testdata = dat_test, testlabel = dat_test$emotion_idx)
+
+
+
+
+```
+
+```{r}
+depth <- 50
+child_weight <- 20
+gamma <- 0
+colsamp <- 0.5
+eta <- 0.05
+nrounds <-500
+ac.test <- 
+
+for (i in 1:length(eta)){
+    par1 <- data.frame(depth, child_weight,gamma,colsamp, eta[i], nrounds)
+    xgb.pca.new1 <- xgb_train(pc.train.new, par = par1)
+    ac.test[i] <- accuracy(xgb.pca.new1, testdata = pc.test.new, 
+                         testlabel = pc.test.new$emotion_idx)$overall[1]
+    }
+
+which.max(ac.test)
+ac.test
+```
+
+
+
+
+### Tuning on PCA data
+
+```{r}
+  numberOfClasses <- length(unique(pc.train.new$emotion_idx))
+  
+  train_pca_dat <-pc.train.new[, c(1:(length(pc.train.new) - 1))] %>% as.matrix()
+  train_pca_label <- as.numeric(pc.train.new$emotion_idx)
+  train_pca_matrix <- xgb.DMatrix(data = train_pca_dat, label = train_pca_label)
+  
+  
+tm.pca.cv <- system.time(xgb.pca.fit<- xgb.cv(data=train_pca_matrix,
+                      eta=0.05,
+                      nfold = 5,
+                      gamma=0.1,
+                      colsample_bytree = 0.5,
+                      max_depth=5,
+                      min_child_weight = 10,
+                      objective="multi:softprob",
+                      eval_metric="mlogloss",
+                      num_class=numberOfClasses + 1,
+                      nrounds=1000,
+                      verbose=0,
+                      prediction = TRUE,
+                      early_stopping_rounds = 10
+                      ))
+
+elog <- xgb.pca.fit$evaluation_log
+
+iter <- ggplot(elog)+
+  geom_line(aes(x=iter, y=train_mlogloss_mean), color = "red")+
+  geom_line(aes(x=iter, y=test_mlogloss_mean), color = "blue")
+
+which.min(elog$test_mlogloss_mean)
+iter
+tm.pca.cv
+```
 
 ```{r}
 #### TUNE ###
-source("../lib/xgb_tune.R")
 
-tune.result <- xgb_tune(dat_train = dat_train)
-tune.result
-cv_err <- as.data.frame(tune.result[1])
-save(cv_err, file = "./cv_err.Rdata")
-best_par <- as.data.frame(tune.result[2])
-class(best_par)
-save(best_par, file = "./best_par.Rdata")
+depth <- seq(5, 50, 5)
+weight <- seq(5, 50, 5)
+
+tune.result.pca1 <- xgb_tune(dat_train = pc.train, max_depth_values = depth, min_child_weight_values = weight)
+tune.result.pca1
+cv_err.pca1 <- as.data.frame(tune.result.pca1[1])
+save(cv_err.pca1, file = "./cv_err2.Rdata")
+best_par.pca1 <- as.data.frame(tune.result.pca1[2])
+save(best_par.pca1, file = "./best_par.pca1.Rdata")
 ```
 
 
-```{r}
-model_tuned <- xgb_train(dat_train = dat_train, par = best_par)
-
-tuned_pred <- xgb_test(model = model_tuned, dat_test = dat_test, par = NULL) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1, label = test_label)
-
-confusionMatrix(factor(tuned_pred$prediction), factor(tuned_pred$label), mode = "everything")
-
-xgb.save(model_tuned, "xgb_tuned.model")
-```

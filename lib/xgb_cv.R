@@ -25,7 +25,7 @@ xgb_cv <- function(dat_train, K=5, par=NULL){
     
   }		
   
-  return(list(error = mean(cv.error), sd = sd(cv.error)) )
+  return(list(error = mean(cv.error), sd = sd(cv.error), error_list = cv.error) )
   
   
   

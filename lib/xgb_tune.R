@@ -1,12 +1,9 @@
-xgb_tune <- function(dat_train){
+xgb_tune <- function(dat_train, max_depth_values, min_child_weight_values){
   
   
   library("xgboost")  
   source("../lib/xgb_cv.R")
-  
-  max_depth_values <- seq(7,13,2)
-  min_child_weight_values <- seq(5,11,2)
-  
+
   # error matrix
   error_matrix = matrix(NA,nrow = length(max_depth_values), length(min_child_weight_values))
   rownames(error_matrix) <- paste(max_depth_values)
