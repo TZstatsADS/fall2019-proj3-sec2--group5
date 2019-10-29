@@ -6,15 +6,15 @@
 
 Term: Fall 2019
 
-+ Team ##
++ Team 5
 + Team members
-	+ team member 1
-	+ team member 2
-	+ team member 3
-	+ team member 4
-	+ team member 5
+	+ Qiwen Gao, qg2165
+	+ Sixing Hao, sh3799
+	+ Sagar Lal, sl3946
+	+ Yakun Wang, yw3211
+	+ Xiyi Yan, xy2380
 
-+ Project summary: In this project, we created a classification engine for facial emotion recognition. 
++ Project summary: In this project, we created a classification engine for facial emotion recognition. We tried several different models and feature engineering. In terms of models, we tried gbm's, svm, xgboost, and random forest. For feature engineering, we tried several methods of feature reduction both manual and using a pca. We also generated our own features of accounting for area of several parts of the face. We discovered that SVM worked the best in terms of pure accuracy on a held-out test set.  
 	
 **Contribution statement**: ([default](doc/a_note_on_contributions.md)) All team members contributed equally in all stages of this project. All team members approve our work presented in this GitHub repository including this contributions statement. 
 
