@@ -1,6 +1,6 @@
 library(gbm)
 
-xgb_tune<-function(dat_train){
+gbm_tune<-function(dat_train){
   hyper_grid <- expand.grid(
     shrinkage = c(.01, .1, 0.05),
     bag.fraction = c(0.5, 0.65, 0.8), 
