@@ -47,7 +47,7 @@ library(caret)
 ### Step 0 set work directories, extract paths, summarize
 ```{r wkdir, eval=FALSE}
 set.seed(0)
-setwd("~/Project3-FacialEmotionRecognition/doc")
+#setwd("~/fall2019-proj3-sec2--group5/doc")
 # here replace it with your own path or manually set it in RStudio to where this rmd file is located. 
 # use relative path for reproducibility
 ```
@@ -60,32 +60,7 @@ train_pt_dir <- paste(train_dir,  "points/", sep="")
 train_label_path <- paste(train_dir, "label.csv", sep="") 
 ```
 
-
-### Step 1: set up controls for evaluation experiments.
-
-In this chunk, we have a set of controls for the evaluation experiments. 
-
-+ (T/F) cross-validation on the training set
-+ (number) K, the number of CV folds
-+ (T/F) process features for training set
-+ (T/F) run evaluation on an independent test set
-+ (T/F) process features for test set
-
-```{r exp_setup}
-run.cv=TRUE # run cross-validation on the training set
-K <- 5  # number of CV folds
-run.feature.train=TRUE # process features for training set
-run.test=TRUE # run evaluation on an independent test set
-run.feature.test=TRUE # process features for test set
-```
-Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications. In this Starter Code, we tune parameter k (number of neighbours) for KNN.
-
-```{r model_setup}
-k = c(5,11,21,31,41,51)
-model_labels = paste("KNN with K =", k)
-```
-
-### Step 2: import data and train-test split 
+### Step 1: import data and train-test split 
 ```{r}
 #train-test split
 info <- read.csv(train_label_path)
@@ -95,18 +70,12 @@ train_idx <- sample(info$Index, n_train, replace = F)
 test_idx <- setdiff(info$Index,train_idx)
 ```
 
-If you choose to extract features from images, such as using Gabor filter, R memory will exhaust all images are read together. The solution is to repeat reading a smaller batch(e.g 100) and process them. 
-```{r}
-n_files <- length(list.files(train_image_dir))
-
-image_list <- list()
-for(i in 1:100){
-   image_list[[i]] <- readImage(paste0(train_image_dir, sprintf("%04d", i), ".jpg"))
-}
-```
+###Step 2: Read fiducial points
 
 Fiducial points are stored in matlab format. In this step, we read them and store them in a list.
 ```{r read fiducial points}
+n_files <- length(list.files(train_image_dir))
+
 #function to read fiducial points
 #input: index
 #output: matrix of fiducial points corresponding to the index
@@ -116,8 +85,63 @@ readMat.matrix <- function(index){
 
 #load fiducial points
 fiducial_pt_list <- lapply(1:n_files, readMat.matrix)
+
 save(fiducial_pt_list, file="../output/fiducial_pt_list.RData")
 ```
+
+
+### NEW FEATURE GENERATION ### IGNORE FOR RIGHT NOW ####
+``` {r}
+source('../lib/lefteye_feature.R')
+
+left_eye_area = lefteyeareafeature(lefteyept, c(1:2500))
+
+polygon_area <- function(vec){
+    
+    return(polyarea(x=c(vec[1,1], vec[2,1],vec[3,1],vec[4,1],vec[1,1]),y=c(vec[1,2], vec[2,2],vec[3,2],vec[4,2],vec[1,2])))
+  }
+
+# temp = lefteyeareafeature(input_list = lefteyept, 1:2500) 
+points = lefteyept[1:2500]
+
+polygon_area_feature = as.vector(sapply(points, polygon_area))
+
+as.vector(sapply(lefteyept[index], polygon_area) 
+
+lefteye_data <- cbind(polygon_area_feature, info$emotion_idx[1:2500])
+
+colnames(lefteye_data) <- c(paste("feature", 1:(ncol(lefteye_data)-1), sep = ""), "emotion_idx")
+
+lefteye_train_data <- as.data.frame(lefteye_data[train_idx,])
+  
+lefteye_train_data$emotion_idx <- as.factor(lefteye_train_data$emotion_idx)
+
+lefteye_test_data <- as.data.frame(lefteye_data[test_idx,])
+  
+lefteye_test_data$emotion_idx <- as.factor(lefteye_test_data$emotion_idx)
+
+tm_feature_test <- NA
+if(run.feature.train){
+  tm_feature_test <- system.time(dat_test <- feature(fiducial_pt_list, test_idx))
+}
+
+ordering = c(1:6006,6008,6007)
+
+dat_train = merge(dat_train, lefteye_train_data$feature1, by=0)
+dat_train$Row.names <-NULL
+dat_train = dat_train[,ordering]
+
+dat_test = merge(dat_test, lefteye_test_data$feature1, by=0)
+dat_test$Row.names <-NULL
+dat_test = dat_test[,ordering]
+
+save(dat_train, file="../output/feature_train.RData")
+save(dat_test, file="../output/feature_test.RData")
+temp = sapply(dat_test, mode)
+
+
+```
+
 
 ### Step 3: construct features and responses
 
@@ -137,20 +161,52 @@ and the midpoint of the upper lip(52).  For example, the distance of an happy fa
   + Output: an RData file that contains extracted features and corresponding responses
 
 ```{r feature}
+#MODIFY FEATURE.R TO INCLUDE RESULTS FROM NEW FEATURE GENERATION
+
 source("../lib/feature.R")
-tm_feature_train <- NA
-if(run.feature.train){
-  tm_feature_train <- system.time(dat_train <- feature(fiducial_pt_list, train_idx))
-}
+source("../lib/pca.train.test.R")
 
-tm_feature_test <- NA
-if(run.feature.train){
-  tm_feature_test <- system.time(dat_test <- feature(fiducial_pt_list, test_idx))
-}
+tm_feature_full_train <- NA
+tm_feature_full_train <- system.time(dat_train_full <- feature(fiducial_pt_list, train_idx))
 
-save(dat_train, file="../output/feature_train.RData")
-save(dat_test, file="../output/feature_test.RData")
+tm_feature_reduced_train <- NA
+tm_feature_reduced_train <- system.time(dat_train_reduced <- feature(fiducial_pt_list, train_idx, df = "reduced"))
+
+tm_feature_full_test <- NA
+tm_feature_full_test <- system.time(dat_test_full <- feature(fiducial_pt_list, test_idx))
+
+tm_feature_reduced_test <- NA
+tm_feature_reduced_test <- system.time(dat_test_reduced <- feature(fiducial_pt_list, test_idx, df = "reduced"))
+
+pca_full_data = pca.train.test(dat_train_full, dat_test_full)
+dat_train_full_pca = pca_full_data$train
+dat_test_full_pca = pca_full_data$test
+
+pca_reduced_data = pca.train.test(dat_train_reduced, dat_test_reduced)
+dat_train_reduced_pca = pca_reduced_data$train
+dat_test_reduced_pca = pca_reduced_data$test
 ```
+
+### Step 4: Train and Test Different Models, Add model train and predict here, track training time for each model and for testing each model, as well as estimated accuracy
+
+``` {r gbm}
+
+```
+
+``` {r xgboost}
+
+```
+
+``` {r svm}
+
+```
+
+``` {r lda}
+
+```
+
+
+###STARTER CODE BELOW HERE FOR REFERENCE
 
 ### Step 4: Train a classification model with training features and responses
 Call the train model and test model from library. 
