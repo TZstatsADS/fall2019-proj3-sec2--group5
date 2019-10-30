@@ -2,7 +2,7 @@
 ### Construct reduced features  ###
 ###################################
 
-
+library(geometry)
 feature_reduced <- function(input_list = fiducial_pt_list, index){
   
   
