@@ -9,7 +9,7 @@ xgb_train <- function(dat_train, par=NULL){
     gamma <- 0
     colsample <- 0.5
     eta <- 0.05
-    nrounds <- 500
+    nrounds <- 300
   } else {
     depth <- par$depth
     child_weight <- par$child_weight
