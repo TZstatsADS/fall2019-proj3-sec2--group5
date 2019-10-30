@@ -35,6 +35,20 @@ if(!require("ggplot2")){
 if(!require("caret")){
   install.packages("caret")
 }
+#Additional packages used in lib files
+if(!require("geometry")){
+  install.packages("geometry")
+}
+
+if(!require("gbm")){
+  install.packages("gbm")
+}
+
+if(!require("e1071")){
+  install.packages("e1071")
+}
+
+
 
 library(R.matlab)
 library(readxl)
@@ -90,59 +104,6 @@ save(fiducial_pt_list, file="../output/fiducial_pt_list.RData")
 ```
 
 
-### NEW FEATURE GENERATION ### IGNORE FOR RIGHT NOW ####
-``` {r}
-source('../lib/lefteye_feature.R')
-
-left_eye_area = lefteyeareafeature(lefteyept, c(1:2500))
-
-polygon_area <- function(vec){
-    
-    return(polyarea(x=c(vec[1,1], vec[2,1],vec[3,1],vec[4,1],vec[1,1]),y=c(vec[1,2], vec[2,2],vec[3,2],vec[4,2],vec[1,2])))
-  }
-
-# temp = lefteyeareafeature(input_list = lefteyept, 1:2500) 
-points = lefteyept[1:2500]
-
-polygon_area_feature = as.vector(sapply(points, polygon_area))
-
-as.vector(sapply(lefteyept[index], polygon_area) 
-
-lefteye_data <- cbind(polygon_area_feature, info$emotion_idx[1:2500])
-
-colnames(lefteye_data) <- c(paste("feature", 1:(ncol(lefteye_data)-1), sep = ""), "emotion_idx")
-
-lefteye_train_data <- as.data.frame(lefteye_data[train_idx,])
-  
-lefteye_train_data$emotion_idx <- as.factor(lefteye_train_data$emotion_idx)
-
-lefteye_test_data <- as.data.frame(lefteye_data[test_idx,])
-  
-lefteye_test_data$emotion_idx <- as.factor(lefteye_test_data$emotion_idx)
-
-tm_feature_test <- NA
-if(run.feature.train){
-  tm_feature_test <- system.time(dat_test <- feature(fiducial_pt_list, test_idx))
-}
-
-ordering = c(1:6006,6008,6007)
-
-dat_train = merge(dat_train, lefteye_train_data$feature1, by=0)
-dat_train$Row.names <-NULL
-dat_train = dat_train[,ordering]
-
-dat_test = merge(dat_test, lefteye_test_data$feature1, by=0)
-dat_test$Row.names <-NULL
-dat_test = dat_test[,ordering]
-
-save(dat_train, file="../output/feature_train.RData")
-save(dat_test, file="../output/feature_test.RData")
-temp = sapply(dat_test, mode)
-
-
-```
-
-
 ### Step 3: construct features and responses
 
 + The follow plots show how pairwise distance between fiducial points can work as feature for facial emotion recognition.
@@ -161,22 +122,43 @@ and the midpoint of the upper lip(52).  For example, the distance of an happy fa
   + Output: an RData file that contains extracted features and corresponding responses
 
 ```{r feature}
-#MODIFY FEATURE.R TO INCLUDE RESULTS FROM NEW FEATURE GENERATION
-
 source("../lib/feature_full.R")
 source("../lib/feature_reduced.R")
 
+#Original all 6k fiducial features
 tm_feature_full_train <- NA
 tm_feature_full_train <- system.time(dat_train_full <- feature_full(fiducial_pt_list, train_idx))
 
-tm_feature_full_test <- NA
-tm_feature_full_test <- system.time(dat_test_full <- feature(fiducial_pt_list, test_idx))
+save(dat_train_full, file="../output/dat_train_full.RData")
 
+tm_feature_full_test <- NA
+tm_feature_full_test <- system.time(dat_test_full <- feature_full(fiducial_pt_list, test_idx))
+
+save(dat_test_full, file="../output/dat_test_full.RData")
+
+
+###Modified Data Set with generated new values
 tm_feature_reduced_train <- NA
 tm_feature_reduced_train <- system.time(dat_train_reduced <- feature_reduced(fiducial_pt_list, train_idx))
 
+save(dat_train_reduced, file="../output/dat_train_reduced.RData")
+
+
 tm_feature_reduced_test <- NA
 tm_feature_reduced_test <- system.time(dat_test_reduced <- feature_reduced(fiducial_pt_list, test_idx))
+
+save(dat_test_reduced, file="../output/dat_test_reduced.RData")
+
+
+####Optional Load Data
+#Original all fiducial data
+load(file="../output/dat_train_full.RData")
+load(file="../output/dat_test_full.RData")
+
+#Reduced generated dataset
+load(file="../output/dat_train_reduced.RData")
+load(file="../output/dat_test_reduced.RData")
+
 ```
 
 ### Step 4: Train and Test Different Models, Add model train and predict here, track training time for each model and for testing each model, as well as estimated accuracy
@@ -187,6 +169,11 @@ source("../lib/gbm_test.R")
 
 ###Traing
 gbm.fit<-gbm_train(dat_train_full)
+
+#Save and load model
+saveRDS(gbm.fit, "../output/gbm.RDS")
+gbm.fit<-readRDS("../output/gbm.RDS")
+
 ###Testing
 pred_gbm<-gbm_test(gbm.fit,dat_test_full)
 #Evaluation
@@ -207,8 +194,19 @@ confusionMatrix(dat_test_full$emotion_idx,as.factor(pred.class))
 
 ```
 
+### Step 5: Summarize Running Time
+Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
+```{r running_time}
+cat("Time for constructing training features=", tm_feature_reduced_train[1], "s \n")
+cat("Time for constructing testing features=", tm_feature_reduced_test[1], "s \n")
+#cat("Time for training model=", tm_train[1], "s \n")
+cat("Time for testing model=", tm_test[1], "s \n")
+```
 
-###STARTER CODE BELOW HERE FOR REFERENCE
+
+
+
+###STARTER CODE BELOW HERE FOR REFERENCE IGNORE!!
 
 ### Step 4: Train a classification model with training features and responses
 Call the train model and test model from library. 
@@ -300,7 +298,7 @@ Note that the accuracy is not high but is better than that of ramdom guess(4.5%)
 Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
 ```{r running_time}
 cat("Time for constructing training features=", tm_feature_train[1], "s \n")
-cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
+cat("Time for constructing testing features=", tm_feature_reduced_test[1], "s \n")
 #cat("Time for training model=", tm_train[1], "s \n")
 cat("Time for testing model=", tm_test[1], "s \n")
 ```
