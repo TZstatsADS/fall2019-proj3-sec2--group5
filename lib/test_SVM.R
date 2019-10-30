@@ -2,7 +2,7 @@
 ### Classification with testing data ###
 ########################################
 
-test <- function(model, dat_test){
+svm_test <- function(model, dat_test, probability=FALSE){
   
   ### Input: 
   ###  - the fitted classification model using training data
@@ -13,6 +13,6 @@ test <- function(model, dat_test){
   library("e1071")
   
   ### make predictions
-  pred <- predict(model, dat_test)
+  pred <- predict(model, dat_test, probability=probability)
   return(pred)
 }
