@@ -3,7 +3,7 @@ gbm_train<-function(dat_train){
 	
 	library(gbm)
 	
-	gbm.fit<-gbm(emotion_idx~.,
+	tm.train<-system.time(gbm.fit<-gbm(emotion_idx~.,
          distribution="multinomial",
          data=dat_train,
          n.trees = 200,
@@ -11,5 +11,5 @@ gbm_train<-function(dat_train){
          shrinkage = 0.1,
          cv.folds=3))
          
-    return(gbm.fit)
+    return(list(gbm.fit,tm.train))
 }

@@ -7,10 +7,10 @@ gbm_test<-function(model, dat_test){
 	best_iter<-gbm.perf(model,method="cv")
 	
 	###Testing
-	pred_gbm<-predict(object=model,
+	tm.test<-system.time(pred_gbm<-predict(object=model,
                   newdata=dat_test,
                   n.trees=best_iter,
-                  type="response")
+                  type="response"))
 	
-	return(pred_gbm)
+	return(list(pred_gbm,tm.test))
 }

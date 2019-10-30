@@ -163,34 +163,36 @@ and the midpoint of the upper lip(52).  For example, the distance of an happy fa
 ```{r feature}
 #MODIFY FEATURE.R TO INCLUDE RESULTS FROM NEW FEATURE GENERATION
 
-source("../lib/feature.R")
-source("../lib/pca.train.test.R")
+source("../lib/feature_full.R")
+source("../lib/feature_reduced.R")
 
 tm_feature_full_train <- NA
-tm_feature_full_train <- system.time(dat_train_full <- feature(fiducial_pt_list, train_idx))
-
-tm_feature_reduced_train <- NA
-tm_feature_reduced_train <- system.time(dat_train_reduced <- feature(fiducial_pt_list, train_idx, df = "reduced"))
+tm_feature_full_train <- system.time(dat_train_full <- feature_full(fiducial_pt_list, train_idx))
 
 tm_feature_full_test <- NA
 tm_feature_full_test <- system.time(dat_test_full <- feature(fiducial_pt_list, test_idx))
 
+tm_feature_reduced_train <- NA
+tm_feature_reduced_train <- system.time(dat_train_reduced <- feature_reduced(fiducial_pt_list, train_idx))
+
 tm_feature_reduced_test <- NA
-tm_feature_reduced_test <- system.time(dat_test_reduced <- feature(fiducial_pt_list, test_idx, df = "reduced"))
-
-pca_full_data = pca.train.test(dat_train_full, dat_test_full)
-dat_train_full_pca = pca_full_data$train
-dat_test_full_pca = pca_full_data$test
-
-pca_reduced_data = pca.train.test(dat_train_reduced, dat_test_reduced)
-dat_train_reduced_pca = pca_reduced_data$train
-dat_test_reduced_pca = pca_reduced_data$test
+tm_feature_reduced_test <- system.time(dat_test_reduced <- feature_reduced(fiducial_pt_list, test_idx))
 ```
 
 ### Step 4: Train and Test Different Models, Add model train and predict here, track training time for each model and for testing each model, as well as estimated accuracy
 
 ``` {r gbm}
+source("../lib/gbm_train.R")
+source("../lib/gbm_test.R")
 
+###Traing
+gbm.fit<-gbm_train(dat_train_full)
+###Testing
+pred_gbm<-gbm_test(gbm.fit,dat_test_full)
+#Evaluation
+pred.class<-apply(pred_gbm[[1]],1,which.max)
+mean(dat_test_full$emotion_idx==pred.class)
+confusionMatrix(dat_test_full$emotion_idx,as.factor(pred.class))
 ```
 
 ``` {r xgboost}
