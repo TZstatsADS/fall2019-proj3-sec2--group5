@@ -2,23 +2,8 @@
 ### Construct features and responses for training images  ###
 #############################################################
 
-## dat_train <- feature(fiducial_pt_list, train_idx)
-## dat_test <- feature(fiducial_pt_list, test_idx)
-## reduced_train <- feature(fiducial_pt_list, train_idx, df="reduced")
-## reduced_test <- feature(fiducial_pt_list, test_idx, df="reduced")
-
-
-
- feature <- function(input_list = fiducial_pt_list, index, df="full"){
+feature_full <- function(input_list = fiducial_pt_list, index){
   
-   if(df=="reduced"){
-   
-   select_pt <-function (df) {
-     return(df[c(19, 20, 21, 22, 23, 27, 28, 29, 30, 31, 1, 2, 4, 6, 8, 10, 11, 13, 15, 17,35, 38, 42, 46,50, 54, 58, 59, 60, 61, 62, 63,67, 71, 75, 64, 78),])
-   }
-  
-   input_list[index] <- lapply(input_list[index], select_pt)}
- 
   ### Construct process features for training images 
   
   ### Input: a list of images or fiducial points; index: train index or test index
@@ -38,9 +23,7 @@
     return(as.vector(apply(mat, 2, pairwise_dist))) 
   }
   
-  
-  
-### Step 3: Apply function in Step 2 to selected index of input list, output: a feature matrix with ncol = n(n-1) = 78*77 = 6006
+  ### Step 3: Apply function in Step 2 to selected index of input list, output: a feature matrix with ncol = n(n-1) = 78*77 = 6006
   pairwise_dist_feature <- t(sapply(input_list[index], pairwise_dist_result))
   dim(pairwise_dist_feature) 
   
