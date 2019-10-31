@@ -1,6 +1,6 @@
 ---
 title: "Main"
-author: "Chengliang Tang, Yujie Wang, Tian Zheng"
+author: "Qiwen Gao, Sixing Hao, Sagar Lal, Yakun Wang, Xiyi Yan"
 output:
   html_document:
     df_print: paged
