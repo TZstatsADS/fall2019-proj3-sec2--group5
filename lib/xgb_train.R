@@ -6,17 +6,9 @@ xgb_train <- function(dat_train, par=NULL){
   if(is.null(par)){
     depth <- 5
     child_weight <- 3
-    gamma <- 0
-    colsample <- 0.5
-    eta <- 0.05
-    nrounds <- 300
   } else {
     depth <- par$depth
     child_weight <- par$child_weight
-    gamma <- par$gamma
-    colsample <- par$colsample
-    eta <- par$eta
-    nrounds <- par$nrounds
   }
   
   
@@ -28,15 +20,15 @@ xgb_train <- function(dat_train, par=NULL){
   
   
   xgb.fit<- xgb.train(data=train_matrix,
-                      eta=eta,
-                      gamma=gamma,
-                      colsample_bytree=colsample,
+                      eta=0.05,
+                      gamma=0.1,
+                      colsample_bytree=0.6,
                       max_depth=depth,
                       min_child_weight = child_weight,
                       objective="multi:softprob",
                       eval_metric="mlogloss",
                       num_class=numberOfClasses + 1,
-                      nrounds=nrounds,
+                      nrounds=500,
                       verbose=0
                       )
   

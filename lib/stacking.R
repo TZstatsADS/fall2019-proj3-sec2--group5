@@ -8,7 +8,7 @@ stacking <- function(xgb_model, svm_model, coef = rep(1/2,2), testdata){
   svm.pred <- attr(svm_test(svm_model, testdata, probability=TRUE), "probabilities")
   svm.pred <- svm.pred[, order(as.integer(colnames(svm.pred)))]
   
-  pred.stack <- coef[1]*xgb.pred + coef[2]*svm.pred +coef[3] %>% as.data.frame()
+  pred.stack <- coef[1]*xgb.pred + coef[2]*svm.pred %>% as.data.frame()
   pred.stack$prediction <- max.col(pred.stack)
   pred.stack$label <- testdata$emotion_idx
   
