@@ -4,10 +4,10 @@ stacking <- function(xgb_model, svm_model, coef = rep(1/2,2), testdata, nolabel=
   library(caret)
   source("../lib/xgb_test.R")
   
-  if(nolabel==FALSE){
+  if(nolabel==TRUE){
     xgb.pred <- xgb_test(xgb_model, testdata)[,-1]
   }else{
-    xgb.pred <- xgb_test(xgb_model, testdata[,c(1:(length(dat_train) - 1))])[,-1]
+    xgb.pred <- xgb_test(model = xgb_model, dat_test = testdata[, c(1:(length(testdata) - 1))])[,-1]
   }
   
   
