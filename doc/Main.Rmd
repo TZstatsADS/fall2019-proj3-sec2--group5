@@ -209,11 +209,14 @@ xgb.load('xgb.model')
 
 ###Training
 tm.xgb.reduced <- system.time( xgb.reduced <- xgb_train(dat_train_reduced, par = best_par_xgb))
+tm.xgb.reduced[1]
 tm.xgb.reduced.test <- system.time(xgb.reduced.test <- xgb_test(xgb.reduced, dat_test_reduced[,-1340]))
-tm.xgb.reduced.test
+tm.xgb.reduced.test[1]
+
 ###Testing (confusion matrix)
 ac.xgb.reduced <- xgb_accuracy(xgb.reduced, testdata = dat_test_reduced, testlabel = dat_test_reduced$emotion_idx)
-
+#Confusion Matrix
+ac.xgb.reduced
 ### Accuracy by class
 ac.xgb.reduced.class <- ac_byclass(ac.xgb.reduced)
 
