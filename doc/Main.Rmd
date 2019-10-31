@@ -1,0 +1,417 @@
+---
+title: "Main"
+author: "Qiwen Gao, Sixing Hao, Sagar Lal, Yakun Wang, Xiyi Yan"
+output:
+  html_document:
+    df_print: paged
+---
+In your final repo, there should be an R markdown file that organizes **all computational steps** for evaluating your proposed Facial Expression Recognition framework. 
+
+This file is currently a template for running evaluation experiments. You should update it according to your codes but following precisely the same structure. 
+
+```{r message=FALSE, eval = FALSE}
+packages.used=c("R.matlab", "readxl","tidyverse","dplyr","ggplot2","caret","geometry","gbm","e1071")
+# check packages that need to be installed.
+packages.needed=setdiff(packages.used, 
+                        intersect(installed.packages()[,1], 
+                                  packages.used))
+# install additional packages
+if(length(packages.needed)>0){
+  install.packages(packages.needed, dependencies = TRUE)
+}
+
+if(!require("EBImage")){
+  source("https://bioconductor.org/biocLite.R")
+  biocLite("EBImage")
+}
+
+if(!require("R.matlab")){
+  install.packages("R.matlab")
+}
+if(!require("readxl")){
+  install.packages("readxl")
+}
+
+if(!require("dplyr")){
+  install.packages("dplyr")
+}
+if(!require("readxl")){
+  install.packages("readxl")
+}
+
+if(!require("ggplot2")){
+  install.packages("ggplot2")
+}
+
+if(!require("caret")){
+  install.packages("caret")
+}
+#Additional packages used in lib files
+if(!require("geometry")){
+  install.packages("geometry")
+}
+
+if(!require("gbm")){
+  install.packages("gbm")
+}
+
+if(!require("e1071")){
+  install.packages("e1071")
+}
+
+if(!require("xgboost")){
+  install.packages("xgboost")
+}
+
+if(!require("MASS")){
+  install.packages("MASS")
+}
+
+
+```
+
+
+```{r load packages}
+library(EBImage)
+library(R.matlab)
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(xgboost)
+library(MASS)
+library(geometry)
+library(gbm)
+library(e1071)
+```
+
+### Step 0 set work directories, extract paths, summarize
+```{r wkdir, eval=FALSE}
+set.seed(0)
+#setwd("~/fall2019-proj3-sec2--group5/doc")
+# here replace it with your own path or manually set it in RStudio to where this rmd file is located. 
+# use relative path for reproducibility
+```
+
+Provide directories for training images. Training images and Training fiducial points will be in different subfolders. 
+```{r}
+train_dir <- "../data/train_set/" # This will be modified for different data sets.
+train_image_dir <- paste(train_dir, "images/", sep="")
+train_pt_dir <- paste(train_dir,  "points/", sep="")
+train_label_path <- paste(train_dir, "label.csv", sep="") 
+```
+
+### Step 1: import data and train-test split 
+```{r}
+#train-test split
+info <- read.csv(train_label_path)
+n <- nrow(info)
+n_train <- round(n*(4/5), 0)
+train_idx <- sample(info$Index, n_train, replace = F)
+test_idx <- setdiff(info$Index,train_idx)
+```
+
+###Step 2: Read fiducial points
+
+Fiducial points are stored in matlab format. In this step, we read them and store them in a list.
+```{r read fiducial points}
+n_files <- length(list.files(train_image_dir))
+
+#function to read fiducial points
+#input: index
+#output: matrix of fiducial points corresponding to the index
+readMat.matrix <- function(index){
+     return(round(readMat(paste0(train_pt_dir, sprintf("%04d", index), ".mat"))[[1]],0))
+}
+
+#load fiducial points
+fiducial_pt_list <- lapply(1:n_files, readMat.matrix)
+
+save(fiducial_pt_list, file="../output/fiducial_pt_list.RData")
+```
+
+
+### Step 3: construct features and responses
+
+
+```{r feature}
+source("../lib/feature_full.R")
+source("../lib/feature_reduced.R")
+
+#Original all 6k fiducial features
+tm_feature_full_train <- NA
+tm_feature_full_train <- system.time(dat_train_full <- feature_full(fiducial_pt_list, train_idx))
+
+save(dat_train_full, file="../output/dat_train_full.RData")
+
+tm_feature_full_test <- NA
+tm_feature_full_test <- system.time(dat_test_full <- feature_full(fiducial_pt_list, test_idx))
+
+save(dat_test_full, file="../output/dat_test_full.RData")
+
+
+###Modified Data Set with generated new values
+tm_feature_reduced_train <- NA
+tm_feature_reduced_train <- system.time(dat_train_reduced <- feature_reduced(fiducial_pt_list, train_idx))
+
+save(dat_train_reduced, file="../output/dat_train_reduced.RData")
+
+
+tm_feature_reduced_test <- NA
+tm_feature_reduced_test <- system.time(dat_test_reduced <- feature_reduced(fiducial_pt_list, test_idx))
+
+save(dat_test_reduced, file="../output/dat_test_reduced.RData")
+
+
+####Optional Load Data
+#Original all fiducial data
+load(file="../output/dat_train_full.RData")
+load(file="../output/dat_test_full.RData")
+
+#Reduced generated dataset
+load(file="../output/dat_train_reduced.RData")
+load(file="../output/dat_test_reduced.RData")
+
+```
+
+### Step 4: Train and Test Different Models, Add model train and predict here, track training time for each model and for testing each model, as well as estimated accuracy
+
+``` {r gbm}
+source("../lib/gbm_train.R")
+source("../lib/gbm_test.R")
+
+###Traing
+gbm.fit<-gbm_train(dat_train_full)
+
+#Save and load model
+saveRDS(gbm.fit, "../output/gbm.RDS")
+gbm.fit<-readRDS("../output/gbm.RDS")
+
+###Testing
+pred_gbm<-gbm_test(gbm.fit,dat_test_full)
+#Evaluation
+pred.class<-apply(pred_gbm[[1]],1,which.max)
+mean(dat_test_full$emotion_idx==pred.class)
+confusionMatrix(dat_test_full$emotion_idx,as.factor(pred.class))
+```
+
+``` {r xgboost}
+source("../lib/xgb_train.R")
+source("../lib/xgb_test.R")
+
+source("../lib/xgb_accuracy.R")
+source("../lib/ac_byclass.R")
+
+### Save and load model
+load(file="../output/best_par_xgb.RData")
+xgb.load('xgb.model')
+
+###Training
+tm.xgb.reduced <- system.time( xgb.reduced <- xgb_train(dat_train_reduced, par = best_par_xgb))
+
+###Testing (confusion matrix)
+ac.xgb.reduced <- xgb_accuracy(xgb.reduced, testdata = dat_test_reduced, testlabel = dat_test_reduced$emotion_idx)
+
+### Accuracy by class
+ac.xgb.reduced.class <- ac_byclass(ac.xgb.reduced)
+
+### Save Model
+xgb.save(xgb.reduced, 'xgb.model')
+```
+
+```{r xgboost tune}
+### Cross Validation to find Best parameter for XGBoost
+source("../lib/xgb_cv.R")
+source("../lib/xgb_tune.R")
+
+depth <- c(5,10, 15)
+child <- c(3,5,10)
+err.tune <- xgb_tune(dat_train_reduced, depth, child)
+xgb.err.tune <- err.tune[1] %>% as.data.frame 
+save(xgb.err.tune, file="../output/xgb.err.tune.RData")
+load(file="../output/xgb.err.tune.RData")
+best_par_xgb <- err.tune[2] %>% as.data.frame()
+save(best_par_xgb, file="../output/best_par_xgb.RData")
+```
+
+``` {r svm run.cv, eval=FALSE}
+source("../lib/train_SVM.R")
+source("../lib/test_SVM.R")
+source("../lib/cross_validation_SVM.R")
+
+cost=seq(0.001, 0.01, length=10)
+err_cv_svm <- matrix(0, nrow = length(cost), ncol = 2)
+for(i in 1:length(cost)){
+    cat("cost=", cost[i], "\n")
+    err_cv_svm[i,] <- svm_cv(dat_train_reduced, K=5, cost[i])
+    save(err_cv_svm, file="../output/err_cv_svm.RData")
+  }
+}
+```
+
+```{r svm cv vis}
+load("../output/err_cv_svm.RData")
+err_cv_svm <- as.data.frame(err_cv_svm) 
+colnames(err_cv_svm) <- c("mean_error", "sd_error")
+err_cv_svm$cost = as.factor(cost)
+err_cv_svm %>% 
+  ggplot(aes(x = cost, y = mean_error,
+             ymin = mean_error - sd_error, ymax = mean_error + sd_error)) + 
+    geom_crossbar() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r svm best_model}
+cost_best <- cost[which.min(err_cv_svm[,1])]
+par_best_svm <- list(cost=cost_best) 
+
+# Training
+tm_train_svm=NA
+tm_train_svm <- system.time(fit_train_svm <- svm_train(dat_train_reduced, par_best_svm))
+
+#Save and load model
+saveRDS(fit_train_svm, "../output/fit_train_svm.RDS")
+fit_train_svm<-readRDS("../output/fit_train_svm.RDS")
+
+# Testing 
+tm_test_svm=NA
+tm_test_svm <- system.time(pred <- svm_test(fit_train_svm, dat_test_reduced))
+
+# Evaluation
+accu <- mean(dat_test_reduced$emotion_idx == pred)
+cat("The accuracy of model: cost =", cost[which.min(err_cv_svm[,1])], "is", accu*100, "%.\n")
+
+confusionMatrix(pred, dat_test_reduced$emotion_idx)
+```
+
+
+``` {r ensemble}
+source("../lib/stacking.R")
+ensemble_param = c() #I don't know what to add here
+
+ensemble_cv <- matrix(0, nrow = length(ensemble_param), ncol = 2)
+for(i in 1:length(ensemble_param)){
+    cat("param=", ensemble_param[i], "\n")
+    ensemble_cv[i,] <- ensemble_train(dat_train_reduced, ensemble_param[i])
+}
+model_best <- ensemble_cv[which.min(ensemble_cv[,1])]
+par_best <- list(ensemble_param = model_best)
+
+tm_ensemble_train=NA
+tm_ensemble_train <- system.time(ensemble_train <- ensemble_train(dat_train_reduced, par_best))
+
+
+```
+
+### Step 5: Summarize Running Time
+Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
+```{r running_time}
+cat("Time for constructing training features=", tm_feature_reduced_train[1], "s \n")
+cat("Time for constructing testing features=", tm_feature_reduced_test[1], "s \n")
+#cat("Time for training model=", tm_train[1], "s \n")
+cat("Time for testing model=", tm_test[1], "s \n")
+```
+
+
+
+
+###STARTER CODE BELOW HERE FOR REFERENCE IGNORE!!
+
+### Step 4: Train a classification model with training features and responses
+Call the train model and test model from library. 
+
+`train.R` and `test.R` should be wrappers for all your model training steps and your classification/prediction steps. 
+
++ `train.R`
+  + Input: a data frame containing features and labels and a parameter list.
+  + Output:a trained model
++ `test.R`
+  + Input: the fitted classification model using training data and processed features from testing images 
+  + Input: an R object that contains a trained classifier.
+  + Output: training model specification
+
++ In this Starter Code, we use KNN to do classification. 
+
+```{r loadlib}
+#source("../lib/train.R") Since knn does not need to train, I comment this line.
+source("../lib/test_knn.R")
+```
+
+#### Model selection with cross-validation
+* Do model selection by choosing among different values of training model parameters.
+```{r runcv, eval=F}
+source("../lib/cross_validation_knn.R")
+if(run.cv){
+  err_cv <- matrix(0, nrow = length(k), ncol = 2)
+  for(i in 1:length(k)){
+    cat("k=", k[i], "\n")
+    err_cv[i,] <- cv.function(dat_train, K, k[i])
+  save(err_cv, file="../output/err_cv.RData")
+  }
+}
+```
+
+Visualize cross-validation results. 
+```{r cv_vis}
+if(run.cv){
+  load("../output/err_cv.RData")
+  err_cv <- as.data.frame(err_cv) 
+  colnames(err_cv) <- c("mean_error", "sd_error")
+  err_cv$k = as.factor(k)
+  err_cv %>% 
+    ggplot(aes(x = k, y = mean_error,
+               ymin = mean_error - sd_error, ymax = mean_error + sd_error)) + 
+    geom_crossbar() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+}
+
+```
+
+
+* Choose the "best" parameter value
+```{r best_model}
+if(run.cv){
+  model_best <- k[which.min(err_cv[,1])]
+}
+par_best <- list(k = model_best)
+```
+
+* Train the model with the entire training set using the selected model (model parameter) via cross-validation.
+```{r final_train}
+#tm_train=NA
+#tm_train <- system.time(fit_train <- train(dat_train, par_best))
+#save(fit_train, file="../output/fit_train.RData")
+```
+
+### Step 5: Run test on test images
+```{r test}
+tm_test=NA
+if(run.test){
+  load(file="../output/fit_train.RData")
+  tm_test <- system.time(pred <- test(model_best, dat_test))
+}
+```
+
+* evaluation
+```{r}
+accu <- mean(dat_test$emotion_idx == pred)
+cat("The accuracy of model:", model_labels[which.min(err_cv[,1])], "is", accu*100, "%.\n")
+
+library(caret)
+confusionMatrix(pred, dat_test$emotion_idx)
+```
+
+Note that the accuracy is not high but is better than that of ramdom guess(4.5%). 
+
+### Summarize Running Time
+Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
+```{r running_time}
+cat("Time for constructing training features=", tm_feature_train[1], "s \n")
+cat("Time for constructing testing features=", tm_feature_reduced_test[1], "s \n")
+#cat("Time for training model=", tm_train[1], "s \n")
+cat("Time for testing model=", tm_test[1], "s \n")
+```
+
+###Reference
+- Du, S., Tao, Y., & Martinez, A. M. (2014). Compound facial expressions of emotion. Proceedings of the National Academy of Sciences, 111(15), E1454-E1462.
