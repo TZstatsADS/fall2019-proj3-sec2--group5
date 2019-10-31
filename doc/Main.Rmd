@@ -224,7 +224,7 @@ ac.xgb.reduced.class <- ac_byclass(ac.xgb.reduced)
 xgb.save(xgb.reduced, 'xgb.model')
 ```
 
-```{r xgboost tune}
+```{r xgboost tune, eval=FALSE}
 ### Cross Validation to find Best parameter for XGBoost
 source("../lib/xgb_cv.R")
 source("../lib/xgb_tune.R")
@@ -239,9 +239,19 @@ best_par_xgb <- err.tune[2] %>% as.data.frame()
 save(best_par_xgb, file="../output/best_par_xgb.RData")
 ```
 
+```{r xgboost CV resutls}
+load(file="../output/xgb.err.tune.RData")
+colnames(xgb.err.tune) <- c(3,5,10)
+xgb.err.tune <-gather(xgb.err.tune, key= "min_child")
+xgb.err.tune$depth <- rep(c(5,10,15),3)
+xgb.err.tune
+ggplot(xgb.err.tune, mapping = aes(x=min_child, y=depth, fill=value))+
+  geom_tile()
+```
+
 ```{r xgboost predict testdata}
 testdata1 <- dat_test_reduced[,-1340]
-xgb.testmat <- xgb_test_nolabel(xgb.reduced, testdata1) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1)
+xgb.testmat <- xgb_test(xgb.reduced, testdata1) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1)
 ```
 
 ``` {r svm run.cv, eval=FALSE}
