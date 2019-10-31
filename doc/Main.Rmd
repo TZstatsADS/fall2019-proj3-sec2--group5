@@ -97,9 +97,12 @@ set.seed(0)
 Provide directories for training images. Training images and Training fiducial points will be in different subfolders. 
 ```{r}
 train_dir <- "../data/train_set/" # This will be modified for different data sets.
+#train_dir <- "../data/test_set_sec2/" #For in class testing set
 train_image_dir <- paste(train_dir, "images/", sep="")
 train_pt_dir <- paste(train_dir,  "points/", sep="")
 train_label_path <- paste(train_dir, "label.csv", sep="") 
+#train_label_path <- paste(train_dir, "labels_prediction.csv", sep="") #For in class testing set
+
 ```
 
 ### Step 1: import data and train-test split 
@@ -110,6 +113,9 @@ n <- nrow(info)
 n_train <- round(n*(4/5), 0)
 train_idx <- sample(info$Index, n_train, replace = F)
 test_idx <- setdiff(info$Index,train_idx)
+
+# test_idx = c(1:2500) #For in class testing set
+
 ```
 
 ###Step 2: Read fiducial points
@@ -175,6 +181,15 @@ load(file="../output/dat_test_reduced.RData")
 
 ```
 
+``` {r in-class-testing}
+#Modifying dataset for in class testing competition
+
+#dat_test_full$feature6006 = dat_test_full$emotion_idx
+#dat_test_reduced$feature1339 = dat_test_reduced$emotion_idx %>% as.numeric
+#colnames(dat_test_reduced)[c(1339,1340)] <-c("feature1339", "emotion_idx") 
+```
+
+
 ### Step 4: Train and Test Different Models, Add model train and predict here, track training time for each model and for testing each model, as well as estimated accuracy
 
 ``` {r gbm}
@@ -184,7 +199,7 @@ source("../lib/gbm_test.R")
 ###Traing
 gbm.fit<-gbm_train(dat_train_full)
 
-#Save and load model
+#Save or load model
 saveRDS(gbm.fit, "../output/gbm.RDS")
 gbm.fit<-readRDS("../output/gbm.RDS")
 
@@ -192,6 +207,7 @@ gbm.fit<-readRDS("../output/gbm.RDS")
 pred_gbm<-gbm_test(gbm.fit,dat_test_full)
 #Evaluation
 pred.class<-apply(pred_gbm[[1]],1,which.max)
+
 mean(dat_test_full$emotion_idx==pred.class)
 confusionMatrix(dat_test_full$emotion_idx,as.factor(pred.class))
 ```
@@ -205,7 +221,7 @@ source("../lib/ac_byclass.R")
 
 ### Save and load model
 load(file="../output/best_par_xgb.RData")
-xgb.reduced <- xgb.load('xgb.model')
+xgb.reduced <- xgb.load('../output/xgb.model')
 
 ###Training
 tm.xgb.reduced <- system.time( xgb.reduced <- xgb_train(dat_train_reduced, par = best_par_xgb))
@@ -240,6 +256,8 @@ save(best_par_xgb, file="../output/best_par_xgb.RData")
 ```
 
 ```{r xgboost CV resutls}
+#XG boost cross-validating results
+
 load(file="../output/xgb.err.tune.RData")
 colnames(xgb.err.tune) <- c(3,5,10)
 xgb.err.tune <-gather(xgb.err.tune, key= "min_child")
@@ -254,6 +272,7 @@ source("../lib/train_SVM.R")
 source("../lib/test_SVM.R")
 source("../lib/cross_validation_SVM.R")
 
+#SVM Cross-validation
 cost=seq(0.001, 0.01, length=10)
 err_cv_svm <- matrix(0, nrow = length(cost), ncol = 2)
 for(i in 1:length(cost)){
@@ -265,6 +284,7 @@ for(i in 1:length(cost)){
 ```
 
 ```{r svm cv vis}
+#Load visualization of cross validation results of svm
 load("../output/err_cv_svm.RData")
 err_cv_svm <- as.data.frame(err_cv_svm) 
 colnames(err_cv_svm) <- c("mean_error", "sd_error")
@@ -304,14 +324,22 @@ confusionMatrix(pred, dat_test_reduced$emotion_idx)
 ``` {r ensemble}
 source("../lib/stacking.R")
 tm_ensemble=NA
-tm_ensemble <- system.time(stack <- stacking(xgb.reduced, fit_train_svm, testdata=dat_test_reduced))
+tm_ensemble <- system.time(stack <- stacking(xgb.reduced, fit_train_svm, testdata=dat_test_reduced, nolabel = FALSE))
+
+stack
+
+#For in class prediction task, creating final csv
+#output <- data.frame(pred.class, stack)
+#colnames(output) <- c("Baseline", "Advanced")
+#write.csv(output, file="../output/labels_prediction.csv")
+
 ```
 
 ### Step 5: Summarize Running Time
 Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
 ```{r running_time}
-cat("Time for constructing training features=", tm_feature_reduced_train[1], "s \n")
-cat("Time for constructing testing features=", tm_feature_reduced_test[1], "s \n")
+cat("Time for constructing modified training features=", tm_feature_reduced_train[1], "s \n")
+cat("Time for constructing modified testing features=", tm_feature_reduced_test[1], "s \n")
 cat("Time for training xgboost model=", tm.xgb.reduced[1], "s \n")
 cat("Time for testing xgboost model=", tm.xgb.reduced.test[1], "s \n")
 cat("Time for training svm model=", tm_train_svm[1], "s \n")
