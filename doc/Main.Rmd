@@ -183,7 +183,42 @@ confusionMatrix(dat_test_full$emotion_idx,as.factor(pred.class))
 ```
 
 ``` {r xgboost}
+source("../lib/xgb_train.R")
+source("../lib/xgb_test.R")
 
+source("../lib/xgb_accuracy.R")
+source("../lib/ac_byclass.R")
+
+### Save and load model
+load(file="../output/best_par_xgb.RData")
+xgb.load('xgb.model')
+
+###Training
+tm.xgb.reduced <- system.time( xgb.reduced <- xgb_train(dat_train_reduced, par = best_par_xgb))
+
+###Testing (confusion matrix)
+ac.xgb.reduced <- xgb_accuracy(xgb.reduced, testdata = dat_test_reduced, testlabel = dat_test_reduced$emotion_idx)
+
+### Accuracy by class
+ac.xgb.reduced.class <- ac_byclass(ac.xgb.reduced)
+
+### Save Model
+xgb.save(xgb.reduced, 'xgb.model')
+```
+
+```{r xgboost tune}
+### Cross Validation to find Best parameter for XGBoost
+source("../lib/xgb_cv.R")
+source("../lib/xgb_tune.R")
+
+depth <- c(5,10, 15)
+child <- c(3,5,10)
+err.tune <- xgb_tune(dat_train_reduced, depth, child)
+xgb.err.tune <- err.tune[1] %>% as.data.frame 
+save(xgb.err.tune, file="../output/xgb.err.tune.RData")
+load(file="../output/xgb.err.tune.RData")
+best_par_xgb <- err.tune[2] %>% as.data.frame()
+save(best_par_xgb, file="../output/best_par_xgb.RData")
 ```
 
 ``` {r svm}
@@ -191,13 +226,14 @@ confusionMatrix(dat_test_full$emotion_idx,as.factor(pred.class))
 ```
 
 ``` {r ensemble}
+source("../lib/stacking.R")
 ensemble_param = c() #I don't know what to add here
 
 ensemble_cv <- matrix(0, nrow = length(ensemble_param), ncol = 2)
 for(i in 1:length(ensemble_param)){
     cat("param=", ensemble_param[i], "\n")
     ensemble_cv[i,] <- ensemble_train(dat_train_reduced, ensemble_param[i])
-
+}
 model_best <- ensemble_cv[which.min(ensemble_cv[,1])]
 par_best <- list(ensemble_param = model_best)
 
