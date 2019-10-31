@@ -22,231 +22,68 @@ source("../lib/xgb_test.R")
 source("../lib/xgb_cv.R")
 source("../lib/xgb_tune.R")
 source("../lib/xgb_accuracy.R")
-source("../lib/pca.train.test.R")
 source("../lib/ac_byclass.R")
 
-load("../output/feature_train.RData")
-load("../output/feature_test.RData")
-
-dat_train1 <- read.csv("../output/dat_train_new.csv")[,-1]
-dat_test1 <- read.csv("../output/dat_test_new.csv")[,-1]
-
-dat_train_half <- read.csv("../output/dat_train_half.csv")[,-1]
-dat_test_half <- read.csv("../output/dat_test_half.csv")[,-1]
-
-dat_train_half_new <- read.csv("../output/dat_train_half_new.csv")[,-1]
-dat_test_half_new <- read.csv("../output/dat_test_half_new.csv")[,-1]
-dat_train_half_new$emotion_idx <- as.factor(dat_train_half_new$emotion_idx)
-dat_test_half_new$emotion_idx <- as.factor(dat_test_half_new$emotion_idx)
-
-label_name <- read.csv("../data/train_set/label.csv")[,c(4,5,6)] %>% distinct()
-
-pc.data <- pca.train.test(dat_train, dat_test)
-pc.train <- pc.data$train
-pc.test <- pc.data$test
-
-pc.data.new <- pca.train.test(dat_train1, dat_test1)
-pc.train.new <- pc.data.new$train
-pc.test.new <- pc.data.new$test
-
-
-pca.data.half.new <- pca.train.test(dat_train_half_new, dat_test_half_new)
-pc.train.half.new <- pca.data.half.new$train
-pc.test.half.new <- pca.data.half.new$test
+#Reduced generated dataset
+load(file="../output/dat_train_reduced.RData")
+load(file="../output/dat_test_reduced.RData")
 
 ```
 
 ```{r}
-tm.baseline <- system.time(xgb_baseline <- xgb_train(dat_train = dat_train))
-tm.pca.baseline <- system.time(xgb_pca <- xgb_train(dat_train = pc.train))
-tm.new <- system.time(xgb_newfeature <- xgb_train(dat_train = dat_train1))
-tm.pca.new <- system.time(xgb_pca_newfeature <- xgb_train(dat_train = pc.train.new))
-tm.baseline.half <- system.time(xgb_half <- xgb_train(dat_train = dat_train_half))
+load(file="../output/best_par_xgb.RData")
+tm.xgb.reduced <- system.time( xgb.reduced <- xgb_train(dat_train_reduced, par = best_par_xgb))
+ac.xgb.reduced <- xgb_accuracy(xgb.reduced, testdata = dat_test_reduced, testlabel = dat_test_reduced$emotion_idx)
 
-
-ac.baseline <- xgb_accuracy(xgb_baseline, testdata = dat_test, testlabel = dat_test$emotion_idx)
-ac.pca.baseline <- xgb_accuracy(xgb_pca, testdata = pc.test, testlabel = pc.test$emotion_idx)
-ac.new <- xgb_accuracy(xgb_newfeature, testdata = dat_test1, testlabel = dat_test1$emotion_idx)
-ac.pca.new <- xgb_accuracy(xgb_pca_newfeature, testdata = pc.test.new, 
-                       testlabel = pc.test.new$emotion_idx)
-ac.baseline.half <- xgb_accuracy(xgb_half, testdata = dat_test_half, testlabel = dat_test_half$emotion_idx)
-
-time <- c(tm.baseline[1], tm.pca.baseline[1], tm.new[1], tm.pca.new[1], tm.svm.pca[1], tm.lda.pca[1])
-ac <- c(ac.baseline$overall[1], ac.pca.baseline$overall[1], ac.new$overall[1], ac.pca.new$overall[1], ac.svm.pca, ac.lda.pca) 
-
-type <- c("baseline", "baseline_pca", "new_feature", "new_feature_pca", "svm_pca", "lda_pca")
-performance <- data.frame(type, time, ac)
-performance
-
-ac.baseline.class <- ac_byclass(ac.baseline$table)
-ac.pca.baseline.class <- ac_byclass(ac.pca.baseline$table)
-ac.new.class <- ac_byclass(ac.new$table)
-ac.pca.new.class <- ac_byclass(ac.pca.new$table)
-ac.class <- as.data.frame(rbind(ac.baseline.class, ac.pca.baseline.class, ac.new.class, ac.pca.new.class, ac.svm.pca.class, ac.lda.pca.class))
-ac.class$type<- type 
-performance <- left_join(performance, ac.class, by="type")
-label_names <- as.character(label_name$emotion_cat)
-colnames(performance) <- c("model_type", "training_time", "overall_accuracy", label_names)
-performance.t <- as.data.frame(t(performance)) 
-
+ac.xgb.reduced.class <- ac_byclass(ac.xgb.reduced)
+ac.xgb.reduced.class
 ```
+
 ### SVM
 
 ```{r}
 source("../lib/train_SVM.R")
 source("../lib/test_SVM.R")
 
-tm.svm.baseline <- system.time(svm.baseline <- svm_train(dat_train, probability = TRUE))
-svm.baseline.pred <- svm_test(svm.baseline, dat_test)
-
-tm.svm.pca <- system.time(svm.pca <- svm_train(pc.train, probability = TRUE))
-svm.pca.pred <- svm_test(svm.pca, pc.test)
-ac.svm.pca <- mean(svm.pca.pred==pc.test$emotion_idx)
-ac.svm.pca
-ac.svm.pca.class <- ac_byclass(confusionMatrix(svm.pca.pred, pc.test$emotion_idx)$table)
-ac.svm.pca.class
-```
-
-### LDA
-
-```{r}
-## LDA
-tm.lda.pca <- system.time(lda.pca<-lda(emotion_idx~., data=pc.train))
-tm.lda.pca
-## Testing Misclassification Error
-lda.pca.pred<-predict(lda.pca, pc.test)
-ac.lda.pca <- mean(lda.pca.pred$class == pc.test$emotion_idx)
-ac.lda.pca
-ac.lda.pca.class <- ac_byclass(confusionMatrix(lda.pca.pred$class, pc.test$emotion_idx)$table)
-ac.lda.pca.class
-
+tm.svm.reduced <- system.time(svm.reduced <- svm_train(dat_train_reduced, probability = TRUE, cost = 0.005))
+svm.reduced.pred <- svm_test(svm.reduced, dat_test_reduced)
+ac.svm.reduced <- mean(svm.reduced.pred==dat_test_reduced$emotion_idx)
+ac.svm.reduced
+ac.svm.reduced.class <- ac_byclass(confusionMatrix(svm.reduced.pred, dat_test_reduced$emotion_idx)$table)
+ac.svm.reduced.class
 ```
 
 
 ```{r}
 ### stacking
 source("../lib/stacking.R")
-stack1 <- stacking(xgb_pca, svm.pca, lda.pca, testdata = pc.test, coef = c(0, 0, 1))
-stack1$overall[1]
+tm.stack <- system.time(stack <- stacking(xgb.reduced, svm.reduced, testdata = dat_test_reduced, coef = c(0.5, 0.5)))
+ac.stack <- stack$overall[1]
+ac.stack.class <- ac_byclass(stack$table)
 ```
-### New data
-```{r}
-tm.xgb.pca.half.new <- system.time(xgb.pca.half.new <- xgb_train(pc.train.half.new, par = par1))
-tm.xgb.pca.half.new
-ac.xgb.pca.half.new <- xgb_accuracy(xgb.pca.half.new, testdata = pc.test.half.new, testlabel = pc.test.half.new$emotion_idx)
-ac.xgb.pca.half.new.class <- ac_byclass(ac.xgb.pca.half.new$table)
 
-tm.svm.pca.half.new <- system.time(svm.pca.half.new <- svm_train(pc.train.half.new, probability = TRUE))
-svm.pca.half.new.pred <- svm_test(svm.pca.half.new, pc.test.half.new)
-ac.svm.pca.half.new <- mean(svm.pca.half.new.pred==pc.test.half.new$emotion_idx)
-ac.svm.pca.half.new
-ac.svm.pca.half.new.class <- ac_byclass(confusionMatrix(svm.pca.half.new.pred, pc.test.half.new$emotion_idx)$table)
-ac.svm.pca.half.new.class
 
-tm.lda.pca.half.new <- system.time(lda.pca.half.new<-lda(emotion_idx~., data=pc.train.half.new))
-tm.lda.pca.half.new
-## Testing Misclassification Error
-lda.pca.half.new.pred<-predict(lda.pca.half.new, pc.test.half.new)
-ac.lda.pca.half.new <- mean(lda.pca.half.new.pred$class == pc.test.half.new$emotion_idx)
-ac.lda.pca.half.new
-ac.lda.pca.half.new.class <- ac_byclass(confusionMatrix(lda.pca.half.new.pred$class, pc.test.half.new$emotion_idx)$table)
-ac.lda.pca.half.new.class
+
+```{r eval=F}
+time.reduced <- c(tm.xgb.reduced[1], tm.svm.reduced[1], tm.stack[1])
+ac.reduced <- c(ac.xgb.reduced$overall[1], ac.svm.reduced, ac.stack)
+type <- c("xgb", "svm", "stacking")
+performance.reduced <- data.frame(type, time.reduced, ac.reduced)
+ac.class.reduced <- as.data.frame(rbind(ac.xgb.reduced.class, ac.svm.reduced.class, ac.stack.class))
+ac.class.reduced$type<- type
+performance.reduced <- left_join(performance.reduced, ac.class.reduced, by="type")
+colnames(performance.reduced) <- c("model_type", "training_time", "overall_accuracy", label_names)
+performance.reduced
 ```
+
+### Tuning
 
 ```{r}
-n <- 100
-best_stack <- matrix(NA, n, 4)
-for (i in 1:n){
-coefs <- runif(3)
-coefs <- coefs/sum(coefs)
-best_stack[i,1] <- coefs[1]
-best_stack[i,2] <- coefs[2]
-best_stack[i,3] <- coefs[3]
-stack2 <- stacking(xgb.pca.half.new, svm.pca.half.new, lda.pca.half.new, coef=coefs, testdata=pc.test.half.new)
-best_stack[i,4] <- stack2$overall[1]
-}
-
-stack.test <- stacking(xgb.pca.half.new, svm.pca.half.new, lda.pca.half.new, coef=c(0.13,0.53, 0.34), testdata=pc.test.half.new)
-stack.test$overall[1]
-ac.stack.test.class <- ac_byclass(stack.test$table)
+depth <- c(5,10, 15)
+child <- c(3,5,10)
+err.tune <- xgb_tune(dat_train_reduced, depth, child)
+xgb.err.tune <- err.tune[1] %>% as.data.frame 
+save(xgb.err.tune, file="../output/xgb.err.tune.RData")
+best_par_xgb <- err.tune[2] %>% as.data.frame()
+save(best_par_xgb, file="../output/best_par_xgb.RData")
 ```
-
-```{r}
-time.halfnew <- c(tm.xgb.pca.half.new[1], tm.svm.pca.half.new[1], tm.lda.pca.half.new[1], tm.stack2[1])
-ac.halfnew <- c(ac.xgb.pca.half.new$overall[1], ac.svm.pca.half.new, ac.lda.pca.half.new, stack.test$overall[1])
-type.halfnew <- c("xgb", "svm", "lda", "stacking")
-performance.halfnew <- data.frame(type.halfnew, time.halfnew, ac.halfnew )
-ac.class.halfnew <- as.data.frame(rbind(ac.xgb.pca.half.new.class, ac.svm.pca.half.new.class, ac.lda.pca.half.new.class, ac.stack.test.class))
-ac.class.halfnew$type.halfnew<- type.halfnew 
-performance.halfnew <- left_join(performance.halfnew, ac.class.halfnew, by="type.halfnew")
-colnames(performance.halfnew ) <- c("model_type", "training_time", "overall_accuracy", label_names)
-
-```
-
-
-
-```{r}
-depth <- 10
-child_weight <- 5
-gamma <- 0.5
-colsample <- 0.5
-eta <- 0.05
-nrounds <-500
-par1 <- data.frame(depth, child_weight, gamma, colsample, eta, nrounds)
-ac.test <- rep(NA, 4)
-
-for (i in 1:4) {
-    par1 <-
-      data.frame(depth, child_weight, gamma[i], colsample, eta, nrounds)
-    xgb.pca.half.new <- xgb_train(pc.train.half.new, par = par1)
-    ac.test[i] <-
-      xgb_accuracy(xgb.pca.half.new,
-                   testdata = pc.test.half.new,
-                   testlabel = pc.test.half.new$emotion_idx)$overall[1]
-}
-
-ac.test
-```
-
-
-
-
-### Tuning on PCA data
-
-```{r}
-  numberOfClasses <- length(unique(pc.train.new$emotion_idx))
-  
-  train_pca_dat <-pc.train.new[, c(1:(length(pc.train.new) - 1))] %>% as.matrix()
-  train_pca_label <- as.numeric(pc.train.new$emotion_idx)
-  train_pca_matrix <- xgb.DMatrix(data = train_pca_dat, label = train_pca_label)
-  
-  
-tm.pca.cv <- system.time(xgb.pca.fit<- xgb.cv(data=train_pca_matrix,
-                      eta=0.05,
-                      nfold = 5,
-                      gamma=0.1,
-                      colsample_bytree = 0.5,
-                      max_depth=5,
-                      min_child_weight = 10,
-                      objective="multi:softprob",
-                      eval_metric="mlogloss",
-                      num_class=numberOfClasses + 1,
-                      nrounds=1000,
-                      verbose=0,
-                      prediction = TRUE,
-                      early_stopping_rounds = 10
-                      ))
-
-elog <- xgb.pca.fit$evaluation_log
-
-iter <- ggplot(elog)+
-  geom_line(aes(x=iter, y=train_mlogloss_mean), color = "red")+
-  geom_line(aes(x=iter, y=test_mlogloss_mean), color = "blue")
-
-which.min(elog$test_mlogloss_mean)
-iter
-tm.pca.cv
-```
-
-
-
