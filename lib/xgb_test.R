@@ -1,18 +1,10 @@
-xgb_test <- function(model, dat_test, par = NULL) {
+xgb_test <- function(model, dat_test) {
   
   library(xgboost)
   
-  test_mat_dat <-dat_test[, c(1:(length(dat_test) - 1))] %>% as.matrix()
-  test_label <- as.numeric(dat_test$emotion_idx)
-  test_matrix <- xgb.DMatrix(data = test_mat_dat, label = test_label)
+  test_mat_dat <- as.matrix(dat_test)
   
-  if (is.null(par)) {
-    ntrees = 300
-  } else{
-    ntrees = par$ntrees
-  }
-  
-  pred <-predict(model, newdata = test_matrix, n.trees = ntrees, reshape=T)
+  pred <-predict(model, newdata = test_mat_dat, missing=NA, n.trees = 500, reshape=T)
   
   return(pred)
   

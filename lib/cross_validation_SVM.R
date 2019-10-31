@@ -5,7 +5,7 @@
 ### Author: Yakun Wang
 ### Project 3
 
-cv.function <- function(dat_train, K, cost){
+svm_cv <- function(dat_train, K, cost){
   ### Input:
   ### - train data frame
   ### - K: a number stands for K-fold CV
@@ -22,9 +22,9 @@ cv.function <- function(dat_train, K, cost){
     test.data <- dat_train[s == i,]
   
     par <- list(cost = cost)
-    fit <- train(train.data, par)
+    fit <- svm_train(train.data, par)
     
-    pred <- test(fit, test.data)  
+    pred <- svm_test(fit, test.data)  
     error <- mean(pred != test.data$emotion_idx) 
     print(error)
     cv.error[i] <- error

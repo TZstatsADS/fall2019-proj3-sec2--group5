@@ -1,0 +1,102 @@
+---
+title: "XGBoost"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(xgboost)
+library(caret)
+library(tidyverse)
+library(MASS)
+```
+
+### Train
+
+```{r}
+source("../lib/xgb_train.R")
+source("../lib/xgb_test.R")
+source("../lib/xgb_accuracy.R")
+source("../lib/ac_byclass.R")
+
+#Reduced generated dataset
+load(file="../output/dat_train_reduced.RData")
+load(file="../output/dat_test_reduced.RData")
+
+```
+
+```{r}
+load(file="../output/best_par_xgb.RData")
+
+source("../lib/xgb_accuracy.R")
+tm.xgb.reduced <- system.time( xgb.reduced <- xgb_train(dat_train_reduced, par = best_par_xgb))
+ac.xgb.reduced <- xgb_accuracy(xgb.reduced, testdata = dat_test_reduced, testlabel = dat_test_reduced$emotion_idx)
+ac.xgb.reduced.class <- ac_byclass(ac.xgb.reduced)
+```
+
+### SVM
+
+```{r}
+source("../lib/train_SVM.R")
+source("../lib/test_SVM.R")
+
+tm.svm.reduced <- system.time(svm.reduced <- svm_train(dat_train_reduced, probability = TRUE, cost = 0.005))
+svm.reduced.pred <- svm_test(svm.reduced, dat_test_reduced)
+ac.svm.reduced <- mean(svm.reduced.pred==dat_test_reduced$emotion_idx)
+ac.svm.reduced.class <- ac_byclass(confusionMatrix(svm.reduced.pred, dat_test_reduced$emotion_idx)$table)
+```
+
+
+```{r}
+### stacking
+source("../lib/stacking.R")
+tm.stack <- system.time(stack <- stacking(xgb.reduced, svm.reduced, testdata = dat_test_reduced, coef = c(0.5, 0.5)))
+ac.stack <- stack$overall[1]
+ac.stack.class <- ac_byclass(stack$table)
+```
+
+
+
+```{r eval=F}
+time.reduced <- c(tm.xgb.reduced[1], tm.svm.reduced[1], tm.stack[1])
+ac.reduced <- c(ac.xgb.reduced$overall[1], ac.svm.reduced, ac.stack)
+type <- c("xgb", "svm", "stacking")
+performance.reduced <- data.frame(type, time.reduced, ac.reduced)
+ac.class.reduced <- as.data.frame(rbind(ac.xgb.reduced.class, ac.svm.reduced.class, ac.stack.class))
+ac.class.reduced$type<- type
+performance.reduced <- left_join(performance.reduced, ac.class.reduced, by="type")
+label_names <- read.csv("../data/train_set/label.csv")[,5] %>% unique %>% as.character()
+colnames(performance.reduced) <- c("model_type", "training_time", "overall_accuracy", label_names)
+save(performance.reduced, file = "../output/performance.reduced.Rdata")
+```
+
+```{r}
+plotdata <- performance.reduced[,-c(2,3)] %>% gather(key = "emotion", value = label_names)
+plotdata <- plotdata[-c(1,2,3),]
+plotdata$model <- rep(c("xgb", "svm", "stacking"), 22)
+colnames(plotdata) <- c("Emotion", "Accuracy", "Model")
+
+theme_dotplot <- theme_bw(14) +
+    theme(axis.text.y = element_text(size = rel(.75)),
+        axis.ticks.y = element_blank(),
+        axis.title.x = element_text(size = rel(.75)),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(size = 0.5),
+        panel.grid.minor.x = element_blank())+ theme(axis.text.x = element_blank())
+
+
+accuracy_plot <-
+  ggplot(plotdata, aes(
+    Accuracy,
+    fct_reorder2(`Emotion`, Model == "stacking", Accuracy, .desc = FALSE),
+    color = Model
+  )) +
+  geom_point() +
+  ggtitle("Prediction Accuracy by class") +
+  ylab("") + xlab("") + theme_dotplot
+
+ggsave("accuracy_dotplot.jpg")
+```

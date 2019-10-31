@@ -209,7 +209,8 @@ xgb.load('xgb.model')
 
 ###Training
 tm.xgb.reduced <- system.time( xgb.reduced <- xgb_train(dat_train_reduced, par = best_par_xgb))
-
+tm.xgb.reduced.test <- system.time(xgb.reduced.test <- xgb_test(xgb.reduced, dat_test_reduced[,-1340]))
+tm.xgb.reduced.test
 ###Testing (confusion matrix)
 ac.xgb.reduced <- xgb_accuracy(xgb.reduced, testdata = dat_test_reduced, testlabel = dat_test_reduced$emotion_idx)
 
@@ -233,6 +234,11 @@ save(xgb.err.tune, file="../output/xgb.err.tune.RData")
 load(file="../output/xgb.err.tune.RData")
 best_par_xgb <- err.tune[2] %>% as.data.frame()
 save(best_par_xgb, file="../output/best_par_xgb.RData")
+```
+
+```{r xgboost predict testdata}
+testdata1 <- dat_test_reduced[,-1340]
+xgb.testmat <- xgb_test_nolabel(xgb.reduced, testdata1) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1)
 ```
 
 ``` {r svm run.cv, eval=FALSE}
@@ -268,7 +274,7 @@ par_best_svm <- list(cost=cost_best)
 
 # Training
 tm_train_svm=NA
-tm_train_svm <- system.time(fit_train_svm <- svm_train(dat_train_reduced, par_best_svm))
+tm_train_svm <- system.time(fit_train_svm <- svm_train(dat_train_reduced, par_best_svm, probability = TRUE))
 
 #Save and load model
 saveRDS(fit_train_svm, "../output/fit_train_svm.RDS")
@@ -288,20 +294,8 @@ confusionMatrix(pred, dat_test_reduced$emotion_idx)
 
 ``` {r ensemble}
 source("../lib/stacking.R")
-ensemble_param = c() #I don't know what to add here
-
-ensemble_cv <- matrix(0, nrow = length(ensemble_param), ncol = 2)
-for(i in 1:length(ensemble_param)){
-    cat("param=", ensemble_param[i], "\n")
-    ensemble_cv[i,] <- ensemble_train(dat_train_reduced, ensemble_param[i])
-}
-model_best <- ensemble_cv[which.min(ensemble_cv[,1])]
-par_best <- list(ensemble_param = model_best)
-
 tm_ensemble_train=NA
-tm_ensemble_train <- system.time(ensemble_train <- ensemble_train(dat_train_reduced, par_best))
-
-
+tm_ensemble_train <- system.time(stack <- stacking(xgb.reduced, fit_train_svm, testdata=dat_test_reduced))
 ```
 
 ### Step 5: Summarize Running Time
@@ -391,6 +385,8 @@ if(run.test){
   load(file="../output/fit_train.RData")
   tm_test <- system.time(pred <- test(model_best, dat_test))
 }
+
+
 ```
 
 * evaluation
