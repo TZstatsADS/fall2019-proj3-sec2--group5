@@ -48,6 +48,13 @@ if(!require("e1071")){
   install.packages("e1071")
 }
 
+if(!require("xgboost")){
+  install.packages("xgboost")
+}
+
+if(!require("MASS")){
+  install.packages("MASS")
+}
 
 
 library(R.matlab)
@@ -56,6 +63,8 @@ library(dplyr)
 library(EBImage)
 library(ggplot2)
 library(caret)
+library(xgboost)
+library(MASS)
 ```
 
 ### Step 0 set work directories, extract paths, summarize
