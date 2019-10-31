@@ -205,7 +205,7 @@ source("../lib/ac_byclass.R")
 
 ### Save and load model
 load(file="../output/best_par_xgb.RData")
-xgb.load('xgb.model')
+xgb.reduced <- xgb.load('xgb.model')
 
 ###Training
 tm.xgb.reduced <- system.time( xgb.reduced <- xgb_train(dat_train_reduced, par = best_par_xgb))
@@ -249,11 +249,6 @@ ggplot(xgb.err.tune, mapping = aes(x=min_child, y=depth, fill=value))+
   geom_tile()
 ```
 
-```{r xgboost predict testdata}
-testdata1 <- dat_test_reduced[,-1340]
-xgb.testmat <- xgb_test(xgb.reduced, testdata1) %>% as.data.frame() %>% mutate(prediction = max.col(., ties.method = "last")-1)
-```
-
 ``` {r svm run.cv, eval=FALSE}
 source("../lib/train_SVM.R")
 source("../lib/test_SVM.R")
@@ -273,6 +268,7 @@ for(i in 1:length(cost)){
 load("../output/err_cv_svm.RData")
 err_cv_svm <- as.data.frame(err_cv_svm) 
 colnames(err_cv_svm) <- c("mean_error", "sd_error")
+cost=seq(0.001, 0.01, length=10)
 err_cv_svm$cost = as.factor(cost)
 err_cv_svm %>% 
   ggplot(aes(x = cost, y = mean_error,
@@ -307,8 +303,8 @@ confusionMatrix(pred, dat_test_reduced$emotion_idx)
 
 ``` {r ensemble}
 source("../lib/stacking.R")
-tm_ensemble_train=NA
-tm_ensemble_train <- system.time(stack <- stacking(xgb.reduced, fit_train_svm, testdata=dat_test_reduced))
+tm_ensemble=NA
+tm_ensemble <- system.time(stack <- stacking(xgb.reduced, fit_train_svm, testdata=dat_test_reduced))
 ```
 
 ### Step 5: Summarize Running Time
@@ -316,110 +312,11 @@ Prediction performance matters, so does the running times for constructing featu
 ```{r running_time}
 cat("Time for constructing training features=", tm_feature_reduced_train[1], "s \n")
 cat("Time for constructing testing features=", tm_feature_reduced_test[1], "s \n")
-#cat("Time for training model=", tm_train[1], "s \n")
-cat("Time for testing model=", tm_test[1], "s \n")
-```
-
-
-
-
-###STARTER CODE BELOW HERE FOR REFERENCE IGNORE!!
-
-### Step 4: Train a classification model with training features and responses
-Call the train model and test model from library. 
-
-`train.R` and `test.R` should be wrappers for all your model training steps and your classification/prediction steps. 
-
-+ `train.R`
-  + Input: a data frame containing features and labels and a parameter list.
-  + Output:a trained model
-+ `test.R`
-  + Input: the fitted classification model using training data and processed features from testing images 
-  + Input: an R object that contains a trained classifier.
-  + Output: training model specification
-
-+ In this Starter Code, we use KNN to do classification. 
-
-```{r loadlib}
-#source("../lib/train.R") Since knn does not need to train, I comment this line.
-source("../lib/test_knn.R")
-```
-
-#### Model selection with cross-validation
-* Do model selection by choosing among different values of training model parameters.
-```{r runcv, eval=F}
-source("../lib/cross_validation_knn.R")
-if(run.cv){
-  err_cv <- matrix(0, nrow = length(k), ncol = 2)
-  for(i in 1:length(k)){
-    cat("k=", k[i], "\n")
-    err_cv[i,] <- cv.function(dat_train, K, k[i])
-  save(err_cv, file="../output/err_cv.RData")
-  }
-}
-```
-
-Visualize cross-validation results. 
-```{r cv_vis}
-if(run.cv){
-  load("../output/err_cv.RData")
-  err_cv <- as.data.frame(err_cv) 
-  colnames(err_cv) <- c("mean_error", "sd_error")
-  err_cv$k = as.factor(k)
-  err_cv %>% 
-    ggplot(aes(x = k, y = mean_error,
-               ymin = mean_error - sd_error, ymax = mean_error + sd_error)) + 
-    geom_crossbar() +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
-}
-
-```
-
-
-* Choose the "best" parameter value
-```{r best_model}
-if(run.cv){
-  model_best <- k[which.min(err_cv[,1])]
-}
-par_best <- list(k = model_best)
-```
-
-* Train the model with the entire training set using the selected model (model parameter) via cross-validation.
-```{r final_train}
-#tm_train=NA
-#tm_train <- system.time(fit_train <- train(dat_train, par_best))
-#save(fit_train, file="../output/fit_train.RData")
-```
-
-### Step 5: Run test on test images
-```{r test}
-tm_test=NA
-if(run.test){
-  load(file="../output/fit_train.RData")
-  tm_test <- system.time(pred <- test(model_best, dat_test))
-}
-
-
-```
-
-* evaluation
-```{r}
-accu <- mean(dat_test$emotion_idx == pred)
-cat("The accuracy of model:", model_labels[which.min(err_cv[,1])], "is", accu*100, "%.\n")
-
-library(caret)
-confusionMatrix(pred, dat_test$emotion_idx)
-```
-
-Note that the accuracy is not high but is better than that of ramdom guess(4.5%). 
-
-### Summarize Running Time
-Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
-```{r running_time}
-cat("Time for constructing training features=", tm_feature_train[1], "s \n")
-cat("Time for constructing testing features=", tm_feature_reduced_test[1], "s \n")
-#cat("Time for training model=", tm_train[1], "s \n")
-cat("Time for testing model=", tm_test[1], "s \n")
+cat("Time for training xgboost model=", tm.xgb.reduced[1], "s \n")
+cat("Time for testing xgboost model=", tm.xgb.reduced.test[1], "s \n")
+cat("Time for training svm model=", tm_train_svm[1], "s \n")
+cat("Time for testing svm model=", tm_test_svm[1], "s \n")
+cat("Time for running ensemble method=", tm_test_svm[1], "s \n")
 ```
 
 ###Reference
