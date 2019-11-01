@@ -48,7 +48,7 @@ library(e1071)
 ```
 
 ### Step 0 set work directories, extract paths, summarize
-```{r wkdir, eval=FALSE}
+```{r wkdir}
 set.seed(0)
 #setwd("~/fall2019-proj3-sec2--group5/doc")
 # here replace it with your own path or manually set it in RStudio to where this rmd file is located. 
