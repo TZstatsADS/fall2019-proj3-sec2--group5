@@ -9,6 +9,11 @@ In your final repo, there should be an R markdown file that organizes **all comp
 
 This file is currently a template for running evaluation experiments. You should update it according to your codes but following precisely the same structure. 
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+
 ```{r message=FALSE, eval = FALSE}
 packages.used=c("R.matlab", "readxl","tidyverse","dplyr","ggplot2","caret","geometry","gbm","e1071")
 # check packages that need to be installed.
@@ -24,50 +29,6 @@ if(!require("EBImage")){
   source("https://bioconductor.org/biocLite.R")
   biocLite("EBImage")
 }
-
-if(!require("R.matlab")){
-  install.packages("R.matlab")
-}
-if(!require("readxl")){
-  install.packages("readxl")
-}
-
-if(!require("dplyr")){
-  install.packages("dplyr")
-}
-if(!require("readxl")){
-  install.packages("readxl")
-}
-
-if(!require("ggplot2")){
-  install.packages("ggplot2")
-}
-
-if(!require("caret")){
-  install.packages("caret")
-}
-#Additional packages used in lib files
-if(!require("geometry")){
-  install.packages("geometry")
-}
-
-if(!require("gbm")){
-  install.packages("gbm")
-}
-
-if(!require("e1071")){
-  install.packages("e1071")
-}
-
-if(!require("xgboost")){
-  install.packages("xgboost")
-}
-
-if(!require("MASS")){
-  install.packages("MASS")
-}
-
-
 ```
 
 
@@ -140,7 +101,6 @@ save(fiducial_pt_list, file="../output/fiducial_pt_list.RData")
 
 ### Step 3: construct features and responses
 
-
 ```{r feature}
 source("../lib/feature_full.R")
 source("../lib/feature_reduced.R")
@@ -168,8 +128,9 @@ tm_feature_reduced_test <- NA
 tm_feature_reduced_test <- system.time(dat_test_reduced <- feature_reduced(fiducial_pt_list, test_idx))
 
 save(dat_test_reduced, file="../output/dat_test_reduced.RData")
+```
 
-
+```{r, eval=FALSE}
 ####Optional Load Data
 #Original all fiducial data
 load(file="../output/dat_train_full.RData")
@@ -178,7 +139,6 @@ load(file="../output/dat_test_full.RData")
 #Reduced generated dataset
 load(file="../output/dat_train_reduced.RData")
 load(file="../output/dat_test_reduced.RData")
-
 ```
 
 ``` {r in-class-testing}
@@ -192,72 +152,58 @@ load(file="../output/dat_test_reduced.RData")
 
 ### Step 4: Train and Test Different Models, Add model train and predict here, track training time for each model and for testing each model, as well as estimated accuracy
 
-``` {r gbm}
+```{r gbm sources loaded}
 source("../lib/gbm_train.R")
 source("../lib/gbm_test.R")
+```
 
+``` {r gbm, eval=FALSE}
 ###Traing
 gbm.fit<-gbm_train(dat_train_full)
 
-#Save or load model
+#Save model
 saveRDS(gbm.fit, "../output/gbm.RDS")
+```
+
+```{r load gbm model, test}
+#load model
 gbm.fit<-readRDS("../output/gbm.RDS")
 
 ###Testing
-pred_gbm<-gbm_test(gbm.fit,dat_test_full)
+pred_gbm<-gbm_test(gbm.fit[[1]],dat_test_full)
 #Evaluation
 pred.class<-apply(pred_gbm[[1]],1,which.max)
 
-mean(dat_test_full$emotion_idx==pred.class)
+
 confusionMatrix(dat_test_full$emotion_idx,as.factor(pred.class))
+cat("The accuracy for gbm model is", mean(dat_test_full$emotion_idx==pred.class)*100, "%.\n")
 ```
 
-``` {r xgboost}
+
+```{r xgboost source loaded}
+source("../lib/xgb_cv.R")
+source("../lib/xgb_tune.R")
 source("../lib/xgb_train.R")
 source("../lib/xgb_test.R")
-
-source("../lib/xgb_accuracy.R")
 source("../lib/ac_byclass.R")
-
-### Save and load model
-load(file="../output/best_par_xgb.RData")
-xgb.reduced <- xgb.load('../output/xgb.model')
-
-###Training
-tm.xgb.reduced <- system.time( xgb.reduced <- xgb_train(dat_train_reduced, par = best_par_xgb))
-tm.xgb.reduced[1]
-tm.xgb.reduced.test <- system.time(xgb.reduced.test <- xgb_test(xgb.reduced, dat_test_reduced[,-1340]))
-tm.xgb.reduced.test[1]
-
-###Testing (confusion matrix)
-ac.xgb.reduced <- xgb_accuracy(xgb.reduced, testdata = dat_test_reduced, testlabel = dat_test_reduced$emotion_idx)
-#Confusion Matrix
-ac.xgb.reduced
-### Accuracy by class
-ac.xgb.reduced.class <- ac_byclass(ac.xgb.reduced)
-
-### Save Model
-xgb.save(xgb.reduced, 'xgb.model')
+source("../lib/xgb_accuracy.R")
 ```
 
 ```{r xgboost tune, eval=FALSE}
 ### Cross Validation to find Best parameter for XGBoost
-source("../lib/xgb_cv.R")
-source("../lib/xgb_tune.R")
-
 depth <- c(5,10, 15)
 child <- c(3,5,10)
 err.tune <- xgb_tune(dat_train_reduced, depth, child)
 xgb.err.tune <- err.tune[1] %>% as.data.frame 
 save(xgb.err.tune, file="../output/xgb.err.tune.RData")
+
 load(file="../output/xgb.err.tune.RData")
 best_par_xgb <- err.tune[2] %>% as.data.frame()
 save(best_par_xgb, file="../output/best_par_xgb.RData")
 ```
 
-```{r xgboost CV resutls}
+```{r xgboost CV resutls visualization}
 #XG boost cross-validating results
-
 load(file="../output/xgb.err.tune.RData")
 colnames(xgb.err.tune) <- c(3,5,10)
 xgb.err.tune <-gather(xgb.err.tune, key= "min_child")
@@ -267,11 +213,38 @@ ggplot(xgb.err.tune, mapping = aes(x=min_child, y=depth, fill=value))+
   geom_tile()
 ```
 
-``` {r svm run.cv, eval=FALSE}
+
+``` {r xgboost training model, eval=FALSE}
+### load model the best tunning parameter
+load(file="../output/best_par_xgb.RData")
+
+###Training
+tm.xgb.reduced <- system.time( xgb.reduced <- xgb_train(dat_train_reduced, par = best_par_xgb))
+tm.xgb.reduced.test <- system.time(xgb.reduced.test <- xgb_test(xgb.reduced, dat_test_reduced[,-1340]))
+
+### Save Model
+xgb.save(xgb.reduced, 'xgb.model')
+```
+
+```{r xgboost load and test the model}
+xgb.reduced <- xgb.load('../output/xgb.model')
+
+###Testing (confusion matrix)
+ac.xgb.reduced <- xgb_accuracy(xgb.reduced, testdata = dat_test_reduced, testlabel = dat_test_reduced$emotion_idx)
+#Confusion Matrix
+ac.xgb.reduced
+### Accuracy by class
+# ac.xgb.reduced.class <- ac_byclass(ac.xgb.reduced)
+cat("The accuracy for xgboost model is", ac.xgb.reduced$overall[1]*100, "%.\n")
+```
+
+```{r svm source loaded}
 source("../lib/train_SVM.R")
 source("../lib/test_SVM.R")
 source("../lib/cross_validation_SVM.R")
+```
 
+``` {r svm run.cv, eval=FALSE}
 #SVM Cross-validation
 cost=seq(0.001, 0.01, length=10)
 err_cv_svm <- matrix(0, nrow = length(cost), ncol = 2)
@@ -297,6 +270,7 @@ err_cv_svm %>%
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
+
 ```{r svm best_model}
 cost_best <- cost[which.min(err_cv_svm[,1])]
 par_best_svm <- list(cost=cost_best) 
@@ -315,9 +289,8 @@ tm_test_svm <- system.time(pred <- svm_test(fit_train_svm, dat_test_reduced))
 
 # Evaluation
 accu <- mean(dat_test_reduced$emotion_idx == pred)
-cat("The accuracy of model: cost =", cost[which.min(err_cv_svm[,1])], "is", accu*100, "%.\n")
-
 confusionMatrix(pred, dat_test_reduced$emotion_idx)
+cat("The accuracy of model: cost =", cost[which.min(err_cv_svm[,1])], "is", accu*100, "%.\n")
 ```
 
 
@@ -327,6 +300,7 @@ tm_ensemble=NA
 tm_ensemble <- system.time(stack <- stacking(xgb.reduced, fit_train_svm, testdata=dat_test_reduced, nolabel = FALSE))
 
 stack
+cat("The accuracy for ensemble method is", stack$overall[1]*100, "%.\n")
 
 #For in class prediction task, creating final csv
 #output <- data.frame(pred.class, stack)
@@ -335,16 +309,28 @@ stack
 
 ```
 
-### Step 5: Summarize Running Time
+### Step 5: Summarize Running Time and Accuracy
 Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
 ```{r running_time}
+cat("Time for constructing original training features=", tm_feature_full_train[1], "s \n")
+cat("Time for constructing original testing features=", tm_feature_full_test[1], "s \n")
+cat("Time for training baseline gbm model=", gbm.fit[[2]][1], "s \n")
+cat("Time for testing baseline gbm model=", pred_gbm[[2]][1], "s \n")
+cat("The accuracy for gbm model is", mean(dat_test_full$emotion_idx==pred.class)*100, "%.\n")
+
 cat("Time for constructing modified training features=", tm_feature_reduced_train[1], "s \n")
 cat("Time for constructing modified testing features=", tm_feature_reduced_test[1], "s \n")
-cat("Time for training xgboost model=", tm.xgb.reduced[1], "s \n")
-cat("Time for testing xgboost model=", tm.xgb.reduced.test[1], "s \n")
+# cat("Time for training xgboost model=", tm.xgb.reduced[1], "s \n")
+# cat("Time for testing xgboost model=", tm.xgb.reduced.test[1], "s \n")
+cat("The accuracy for xgboost model is", ac.xgb.reduced$overall[1]*100, "%.\n")
+
 cat("Time for training svm model=", tm_train_svm[1], "s \n")
 cat("Time for testing svm model=", tm_test_svm[1], "s \n")
-cat("Time for running ensemble method=", tm_test_svm[1], "s \n")
+cat("The accuracy for svm model is", accu*100, "%.\n")
+
+
+cat("Time for running ensemble method=", tm_ensemble[1], "s \n")
+cat("The accuracy for ensemble method is", stack$overall[1]*100, "%.\n")
 ```
 
 ###Reference
